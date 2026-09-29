@@ -1,0 +1,55 @@
+// Synthetic credentials below authenticate only an in-process test server.
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { proxy } from '../src/lib/api/proxy.ts';
+const calls = [];
+const credential = 'fixture-only-not-a-real-credential';
+let reply = { status: 'UP' };
+const server = createServer(async (req, res) => {
+  let body = '';
+  for await (const chunk of req) body += chunk;
+  calls.push({ path: req.url, method: req.method, headers: req.headers, body });
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(reply));
+});
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+const request = (path, method = 'GET', body, extra = {}) => proxy(new Request(`http://localhost:3001/api/floww/${path}`, { method, headers: { Origin: 'http://localhost:3001', 'Content-Type': 'application/json', ...extra }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), path.split('?')[0].split('/'));
+try {
+  delete process.env.FLOWW_API_BASE_URL;
+  delete process.env.FLOWW_SERVER_DEV_TOKEN;
+  assert.equal((await request('actuator/health')).status, 503);
+  assert.equal(calls.length, 0);
+  process.env.FLOWW_API_BASE_URL = `http://127.0.0.1:${server.address().port}`;
+  process.env.FLOWW_SERVER_DEV_TOKEN = credential;
+  assert.equal((await request('api/v1/tasks', 'POST', {})).status, 404);
+  assert.equal((await request('api/executions/not-uuid')).status, 404);
+  assert.equal((await request('api/executions?limit=101')).status, 400);
+  assert.equal((await request('api/ai/drafts', 'POST', {}, { Origin: 'https://foreign.example' })).status, 403);
+  assert.equal((await request('api/ai/drafts', 'POST', {}, { Origin: 'https://foreign.example', 'X-Forwarded-Host': 'foreign.example' })).status, 403);
+  assert.equal((await request('api/ai/drafts', 'POST', { conversation: [] })).status, 400);
+  assert.equal((await request('api/ai/drafts', 'POST', { conversation: [{ role: 'user', content: 'x'.repeat(4001) }] })).status, 400);
+  assert.equal(calls.length, 0);
+  reply = { status: 'UP', reflected: credential, authorization: `Bearer ${credential}`, evidence: { usage: { prompt_tokens: 8 } } };
+  const response = await request('actuator/health');
+  const text = await response.text();
+  assert.equal(text.includes(credential), false);
+  assert.equal(JSON.parse(text).evidence.usage.prompt_tokens, 8);
+  assert.equal(calls.at(-1).headers.authorization, `Bearer ${credential}`);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  const mandate = { goal: 'fixture', itemId: 'item-1', maxTotal: '999999999999.12345678', currency: 'TEST_USDC', recipient: 'merchant_good', expiresAt: '2099-01-01T00:00:00Z' };
+  assert.equal((await request('api/executions', 'POST', { confirmed: true, mandate })).status, 400);
+  reply = { mandate };
+  const created = await request('api/executions', 'POST', { confirmed: true, mandate }, { 'Idempotency-Key': 'fixture-key-0001' });
+  assert.equal((await created.json()).mandate.maxTotal, mandate.maxTotal);
+  assert.equal(JSON.parse(calls.at(-1).body).mandate.maxTotal, mandate.maxTotal);
+  assert.equal(calls.at(-1).headers['idempotency-key'], 'fixture-key-0001');
+  assert.equal((await request('api/executions', 'POST', { confirmed: true, mandate: { ...mandate, maxTotal: 10 } }, { 'Idempotency-Key': 'fixture-key-0001' })).status, 400);
+  assert.equal((await request('api/ai/drafts', 'POST', { conversation: [{ role: 'user', content: 'fixture' }] }, { 'Idempotency-Key': 'ignored-for-draft' })).status, 200);
+  assert.equal(calls.at(-1).headers['idempotency-key'], undefined);
+  assert.equal((await request('api/ai/drafts', 'POST', { conversation: [{ role: 'user', content: 'fixture' }] }, { Origin: 'http://127.0.0.1:3001', Host: '127.0.0.1:3001' })).status, 200);
+  const id = '11111111-1111-4111-8111-111111111111';
+  for (const path of ['api/integrations/readiness', 'api/executions', 'api/executions/history', `api/executions/${id}`, `api/executions/${id}/events?after=2&limit=100`, `api/executions/${id}/evidence.json`]) assert.equal((await request(path)).status, 200);
+  assert.equal((await request(`api/executions/${id}/run`, 'POST')).status, 200);
+  assert.equal(calls.at(-1).body, '');
+  console.log('Proxy contract, isolation, allowlist, origin, validation, decimal and redaction checks passed.');
+} finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }

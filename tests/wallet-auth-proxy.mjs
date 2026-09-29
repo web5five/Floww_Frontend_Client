@@ -1,0 +1,53 @@
+import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
+import { createServer } from 'node:http';
+import { walletAuthProxy } from '../src/lib/auth/server.ts';
+import { proxy } from '../src/lib/api/proxy.ts';
+const token = randomBytes(32).toString('hex');
+const id = randomBytes(32).toString('hex');
+const session = { identity: { namespace: 'eip155', address: '0x' + '11'.repeat(20) }, chainId: '1', expiresAt: new Date(Date.now() + 3500000).toISOString() };
+const calls = [];
+const server = createServer(async (req, res) => {
+  let body = ''; for await (const chunk of req) body += chunk;
+  calls.push({ url: req.url, auth: req.headers.authorization, body });
+  res.setHeader('Content-Type', 'application/json');
+  if (req.url.endsWith('/nonce')) res.end(JSON.stringify({ id, message: 'fixture only', expiresAt: new Date(Date.now() + 290000).toISOString(), secret: token }));
+  else if (req.url.endsWith('/verify')) res.end(JSON.stringify({ sessionToken: token, session }));
+  else if (req.url.endsWith('/signout')) { res.statusCode = 204; res.end(); }
+  else if (req.url.endsWith('/me')) res.end(JSON.stringify(session));
+  else res.end(JSON.stringify([]));
+});
+await new Promise(r => server.listen(0, '127.0.0.1', r));
+const request = (action, method='POST', data, cookie='', origin='http://localhost:3001') => walletAuthProxy(new Request('http://localhost:3001/api/wallet-auth/' + action, { method, headers: { Host: 'localhost:3001', Origin: origin, Cookie: cookie, 'Content-Type': 'application/json' }, ...(data ? {body:JSON.stringify(data)} : {}) }), action);
+try {
+  delete process.env.FLOWW_WALLET_AUTH_ENABLED;
+  assert.equal((await request('challenge', 'POST', {})).status, 503);
+  process.env.FLOWW_WALLET_AUTH_ENABLED = 'true';
+  process.env.FLOWW_WALLET_AUTH_MODE = 'local-session';
+  process.env.FLOWW_API_BASE_URL = `http://127.0.0.1:${server.address().port}`;
+  assert.equal((await request('challenge','POST',{},'', 'https://evil.test')).status,403);
+  assert.equal((await request('verify','POST',{challengeId:id,signature:'0x'+'11'.repeat(65)})).status,400);
+  assert.equal(calls.length,0);
+  const challenge=await request('challenge','POST',{address:session.identity.address,chainId:'1'});
+  assert.equal(challenge.status,200);
+  assert.equal((await challenge.text()).includes(token),false);
+  assert.match(challenge.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/);
+  const verified=await request('verify','POST',{challengeId:id,signature:'0x'+'11'.repeat(65)},`floww_wallet_challenge=${id}`);
+  assert.deepEqual(await verified.json(),session);
+  assert.match(verified.headers.get('set-cookie'),/floww_wallet_session=/);
+  assert.equal(calls[0].auth,undefined); assert.equal(calls[1].auth,undefined);
+  const me=await request('session','GET',undefined,`floww_wallet_session=${token}`);
+  assert.deepEqual(await me.json(),session);
+  assert.equal(calls.at(-1).auth,`Bearer ${token}`);
+  process.env.FLOWW_SERVER_DEV_TOKEN='fixture-only-developer-token';
+  assert.equal((await proxy(new Request('http://localhost:3001/api/floww/api/executions'),['api','executions'])).status,401);
+  const before=calls.length;
+  await proxy(new Request('http://localhost:3001/api/floww/api/executions',{headers:{Cookie:`floww_wallet_session=${token}`}}),['api','executions']);
+  assert.equal(calls.length,before+1); assert.equal(calls.at(-1).auth,`Bearer ${token}`);
+  const logout=await request('logout','POST',undefined,`floww_wallet_session=${token}`);
+  assert.deepEqual(await logout.json(),{revoked:true});
+  assert.match(logout.headers.get('set-cookie'),/Max-Age=0/);
+  process.env.FLOWW_API_BASE_URL='http://remote.example';
+  assert.equal((await request('challenge','POST',{address:session.identity.address,chainId:'1'})).status,503);
+  console.log('wallet auth proxy checks passed');
+} finally { server.closeAllConnections(); await new Promise(r => server.close(r)); }
