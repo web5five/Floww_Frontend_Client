@@ -1,9 +1,10 @@
 import { test, expect } from "@playwright/test";
+import { mkdirSync } from "node:fs";
 
 const taskId = "11111111-1111-4111-8111-111111111111";
 const owner = `0x${"1".repeat(40)}`;
 
-test("chat microphone requires a click, recovers denial, retains task and releases on close", async ({ page }) => {
+test("chat microphone requires a click, recovers denial, retains task and releases on close", async ({ page }, testInfo) => {
   const task = { taskId, status: "AWAITING_APPROVAL", statusReasonCode: null, goal: "처방 품목 구매", mandate: { mandateId: taskId, version: 1, status: "DRAFT", itemId: "acetaminophen-500mg-10", maxAmountBaseUnits: "60000000", consumedBaseUnits: "0", remainingBaseUnits: "60000000", asset: { tokenDecimals: 6, chainId: 11155111, tokenAddress: `0x${"2".repeat(40)}` }, expiresAt: new Date(Date.now() + 3600000).toISOString(), budgetScope: "TASK_CUMULATIVE" }, attempts: [], updatedAt: new Date().toISOString(), completedAt: null };
   const mutations: string[] = [], voiceRequests: string[] = [];
   await page.route("**/api/wallet-auth/*", route => route.fulfill({ json: route.request().url().endsWith("config") ? { enabled: true, mode: "team-jwt", businessReady: true } : { identity: { namespace: "eip155", address: owner }, chainId: "11155111", expiresAt: new Date(Date.now() + 600000).toISOString() } }));
@@ -14,13 +15,18 @@ test("chat microphone requires a click, recovers denial, retains task and releas
   });
   await page.route("**/api/voice/session?*", route => { voiceRequests.push(route.request().url()); return route.fulfill({ contentType: "application/sdp", body: "v=0\r\n" }); });
   await page.addInitScript(({ owner }) => {
-    const state = { requests: 0, stops: 0, peersClosed: 0, enabled: true, channel: null as null | { onmessage?: (event: { data: string }) => void }, emit: (event: unknown) => state.channel?.onmessage?.({ data: JSON.stringify(event) }) };
+    const listeners = new Map<string, () => void>();
+    const state = { requests: 0, stops: 0, peersClosed: 0, enabled: true, track: null as EventTarget | null, channel: null as null | { onmessage?: (event: { data: string }) => void }, emit: (event: unknown) => state.channel?.onmessage?.({ data: JSON.stringify(event) }), endTrack: () => state.track?.dispatchEvent(new Event("ended")), changeAccount: () => listeners.get("accountsChanged")?.() };
     Object.assign(window, { voiceFixture: state });
-    const provider = { request: async ({ method }: { method: string }) => method === "eth_chainId" ? "0xaa36a7" : [owner], on() {}, removeListener() {} };
+    const provider = { request: async ({ method }: { method: string }) => method === "eth_chainId" ? "0xaa36a7" : [owner], on(event: string, listener: () => void) { listeners.set(event, listener); }, removeListener(event: string) { listeners.delete(event); } };
     window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "voice-fixture", name: "Voice Fixture" }, provider } })));
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", { value: async () => {
       if (++state.requests === 1) throw new DOMException("Denied", "NotAllowedError");
-      const track = { get enabled() { return state.enabled; }, set enabled(value: boolean) { state.enabled = value; }, stop() { state.stops++; } };
+      state.enabled = true;
+      const track = new EventTarget() as EventTarget & { enabled: boolean; stop(): void };
+      Object.defineProperty(track, "enabled", { get: () => state.enabled, set: (value: boolean) => { state.enabled = value; } });
+      track.stop = () => { state.stops++; };
+      state.track = track;
       return { getTracks: () => [track], getAudioTracks: () => [track] };
     } });
     class Peer {
@@ -69,6 +75,9 @@ test("chat microphone requires a click, recovers denial, retains task and releas
   expect(mutations).toEqual([]);
   await panel.getByRole("button", { name: "마이크 음소거", exact: true }).click();
   expect((await snapshot()).enabled).toBe(false);
+  mkdirSync("artifacts/voice", { recursive: true });
+  await panel.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `artifacts/voice/chat-${testInfo.project.name}.png`, fullPage: true });
   await page.getByRole("button", { name: "음성 대화 닫기" }).click();
   await expect(panel).toHaveCount(0);
   expect(await snapshot()).toEqual({ requests: 2, stops: 1, peersClosed: 1, enabled: false });
@@ -76,4 +85,26 @@ test("chat microphone requires a click, recovers denial, retains task and releas
   await page.getByRole("button", { name: "음성 대화 열기" }).click();
   await expect(page.getByRole("group", { name: "시나리오 요청 확인" })).toHaveCount(0);
   expect((await snapshot()).requests).toBe(2);
+  await panel.getByRole("button", { name: "음성 대화 시작", exact: true }).click();
+  await expect(panel).toContainText("듣는 중");
+  await page.evaluate(() => (window as unknown as { voiceFixture: { endTrack(): void } }).voiceFixture.endTrack());
+  await expect(panel).toContainText("마이크 연결이 종료됐어요");
+  await expect(panel.getByRole("button", { name: "다시 시작" })).toBeEnabled();
+  expect(mutations).toEqual([]);
+  await panel.getByRole("button", { name: "다시 시작" }).click();
+  await expect(panel).toContainText("듣는 중");
+  await page.evaluate(() => (window as unknown as { voiceFixture: { emit(event: unknown): void } }).voiceFixture.emit({ type: "error", error: { message: "provider details stay private" } }));
+  await expect(panel).toContainText("음성 연결을 확인하지 못했어요");
+  await expect(panel).not.toContainText("provider details stay private");
+  expect(mutations).toEqual([]);
+  await panel.getByRole("button", { name: "다시 시작" }).click();
+  await expect(panel).toContainText("듣는 중");
+  await page.evaluate(() => {
+    const fixture = (window as unknown as { voiceFixture: { emit(event: unknown): void; changeAccount(): void } }).voiceFixture;
+    fixture.emit({ type: "conversation.item.input_audio_transcription.completed", item_id: "private-1", transcript: "이전 소유자의 대화" });
+    fixture.changeAccount();
+  });
+  await expect(page.getByText("이전 소유자의 대화")).toHaveCount(0);
+  await expect.poll(async () => (await snapshot()).stops).toBe(4);
+  expect(mutations).toEqual([]);
 });
