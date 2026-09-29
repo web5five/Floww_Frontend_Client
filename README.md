@@ -1,23 +1,109 @@
-# Floww Client
+<div align="center">
 
-User request, explicit mandate confirmation, funding/approval, progress, result and recovery UX.
+# 🌊 Floww Client
 
-사용자 요청·위임 확인·지갑 승인·진행·결과·복구 화면을 담당합니다.
+### Your request. Your call. Your flow.
 
-[Integration hub](https://github.com/web5five/Floww) · [Server integration issue](https://github.com/web5five/Floww_Server/issues/1)
+**An AI-assisted trading experience where every proposal stays in your hands.**
 
-## Current state / 현재 상태
+[![Status](https://img.shields.io/badge/Status-Foundation%20in%20Progress-4261FF?style=for-the-badge)](#current-state)
+[![Client](https://img.shields.io/badge/Floww-Client-FFFF5C?style=for-the-badge&labelColor=1E1E1E)](#what-is-floww-client)
 
-This repository contains shared agent instructions and issue/PR templates. Application source, dependency lock/build wrapper, Docker runtime and application CI are not yet implemented here. This foundation is not a working component.
+<br />
 
-현재 에이전트 지침과 이슈/PR 템플릿을 준비했습니다. 앱 소스·의존성 잠금/빌드 래퍼·Docker 실행·앱 CI는 아직 구현하지 않았습니다.
+### 🔗 Live Demo
 
-## Start a component task / 작업 착수
+<!-- Add the deployed client URL when it is available. -->
+**Coming soon** · [Add live URL here](#)
 
-1. Read `AGENTS.md` and the latest shared architecture/API contract.
-2. Fetch remote refs; preserve teammate work. Open a bounded issue and feature branch.
-3. Pin the runtime, dependencies and reproducible installation; add placeholder-only env examples.
-4. Add a real build/test job and verify startup/health in the intended environment.
-5. Link actual results in a PR and a bilingual Confluence handoff.
+<br />
 
-Redis, pgvector, Kafka, Eureka and Config Server are deferred baseline services. Do not add dependencies simply to populate an empty repository. Keep secrets and private team sources out of Git.
+[Integration Hub](https://github.com/web5five/Floww) · [Server Integration Issue](https://github.com/web5five/Floww_Server/issues/1)
+
+</div>
+
+---
+
+## ✨ What is Floww Client?
+
+Floww Client is the user-facing application for requesting, reviewing, and following an AI-assisted trade.
+
+It is designed to keep the user informed and in control at every step:
+
+**Request → Delegation → Wallet Approval → Progress → Result → Recovery**
+
+> 🛡️ The client should make consequential actions clear, visible, and intentional.
+
+---
+
+## 🧭 The User Journey
+
+| Step | Experience |
+|---|---|
+| 📝 **Request** | The user describes what they want to do. |
+| 🤝 **Delegation** | The user reviews and confirms the mandate before work begins. |
+| 🔐 **Wallet approval** | The user reviews the transaction and approves it with their wallet. |
+| ⏳ **Progress** | The client shows the current state while the request is being processed. |
+| ✅ **Result** | The user sees the outcome and relevant details. |
+| 🧰 **Recovery** | When something fails or needs attention, the client explains what happened and what to do next. |
+
+---
+
+## 🚧 Current State
+
+This repository currently contains shared agent instructions and issue/PR templates.
+
+**The application is not implemented yet.** Application source, dependency lock and build wrapper, Docker runtime, and application CI have not been added. This repository foundation is not a working client component.
+
+---
+
+## 🗺️ Roadmap
+
+The client foundation will grow into a working application through small, verifiable steps:
+
+- [ ] Establish the application structure and supported runtime.
+- [ ] Pin dependencies and provide a reproducible installation flow.
+- [ ] Add placeholder-only environment variable examples.
+- [ ] Build the request and mandate confirmation experience.
+- [ ] Add wallet approval and transaction status screens.
+- [ ] Show progress, results, and actionable recovery states.
+- [ ] Add a real build and test workflow.
+- [ ] Verify startup and health in the intended environment.
+- [ ] Deploy the client and add its live URL above.
+
+---
+
+## 🧑‍💻 Starting a Component Task
+
+1. Read [`AGENTS.md`](./AGENTS.md) and the latest shared architecture and API contract.
+2. Fetch remote refs, preserve teammate work, and open a bounded issue and feature branch.
+3. Pin the runtime and dependencies, and make installation reproducible.
+4. Add placeholder-only environment examples; never commit secrets.
+5. Add a real build/test job and verify startup and health in the intended environment.
+6. Link actual results in a PR and a bilingual Confluence handoff.
+
+---
+
+## 🏗️ Architecture Notes
+
+Redis, pgvector, Kafka, Eureka, and Config Server are deferred baseline services. Do not add them just to populate an empty repository. Add only the dependencies required by an implemented client feature.
+
+Keep secrets and private team sources out of Git.
+
+---
+
+## 🔗 Project Links
+
+| Resource | Link |
+|---|---|
+| 🌐 Integration hub | [web5five/Floww](https://github.com/web5five/Floww) |
+| ⚙️ Server integration issue | [Floww_Server — Issue #1](https://github.com/web5five/Floww_Server/issues/1) |
+| 🚀 Live client | **Coming soon** · [Add live URL here](#) |
+
+---
+
+<div align="center">
+
+### Clear choices. Visible progress. Your flow. 🌊
+
+</div>
