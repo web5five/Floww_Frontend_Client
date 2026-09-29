@@ -108,3 +108,45 @@ test("chat microphone requires a click, recovers denial, retains task and releas
   await expect.poll(async () => (await snapshot()).stops).toBe(4);
   expect(mutations).toEqual([]);
 });
+
+test("auth expiry during pending microphone permission stops a late stream without opening voice", async ({ page }) => {
+  let voiceRequests = 0;
+  const task = { taskId, status: "AWAITING_APPROVAL", statusReasonCode: null, goal: "처방 품목 구매", mandate: { mandateId: taskId, version: 1, status: "DRAFT", itemId: "acetaminophen-500mg-10", maxAmountBaseUnits: "60000000", consumedBaseUnits: "0", remainingBaseUnits: "60000000", asset: { tokenDecimals: 6, chainId: 11155111, tokenAddress: `0x${"2".repeat(40)}` }, expiresAt: new Date(Date.now() + 3600000).toISOString(), budgetScope: "TASK_CUMULATIVE" }, attempts: [], updatedAt: new Date().toISOString(), completedAt: null };
+  await page.route("**/api/wallet-auth/*", route => route.fulfill({ json: route.request().url().endsWith("config")
+    ? { enabled: true, mode: "team-jwt", businessReady: true }
+    : { identity: { namespace: "eip155", address: owner }, chainId: "11155111", expiresAt: new Date(Date.now() + 120_000).toISOString() } }));
+  await page.route("**/api/tasks**", route => {
+    const path = new URL(route.request().url()).pathname;
+    return route.fulfill({ json: path === "/api/tasks" ? [task] : path.endsWith("/events") ? { events: [], nextCursor: 0, hasMore: false } : task });
+  });
+  await page.route("**/api/voice/session?*", route => { voiceRequests++; return route.fulfill({ contentType: "application/sdp", body: "v=0\r\n" }); });
+  await page.addInitScript(({ owner }) => {
+    const fixture = { requests: 0, stops: 0, resolveMic: null as null | (() => void) };
+    Object.assign(window, { expiryVoiceFixture: fixture });
+    const provider = { request: async ({ method }: { method: string }) => method === "eth_chainId" ? "0xaa36a7" : [owner], on() {}, removeListener() {} };
+    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "expiry-fixture", name: "Expiry Fixture" }, provider } })));
+    Object.defineProperty(navigator.mediaDevices, "getUserMedia", { value: () => {
+      fixture.requests++;
+      return new Promise(resolve => { fixture.resolveMic = () => resolve({ getTracks: () => [{ stop: () => fixture.stops++ }] }); });
+    } });
+    Object.assign(window, { RTCPeerConnection: class {} });
+  }, { owner });
+  await page.goto("/login");
+  await page.getByRole("button", { name: "지갑 선택", exact: true }).click();
+  await page.getByRole("button", { name: /Expiry Fixture.*감지됨/ }).click();
+  await page.getByRole("button", { name: "Expiry Fixture 연결", exact: true }).click();
+  await page.getByRole("link", { name: "내 작업", exact: true }).click();
+  await page.getByText("내 작업 다시 열기", { exact: true }).click();
+  await page.getByRole("button", { name: "내 작업 조회", exact: true }).click();
+  await page.locator(`a[href="/chat/${taskId}"]`).click();
+  await page.getByRole("button", { name: "음성 대화 열기" }).click();
+  const panel = page.getByRole("region", { name: "Floww 음성 대화", exact: true });
+  await page.clock.install({ time: new Date() });
+  await panel.getByRole("button", { name: "음성 대화 시작", exact: true }).click();
+  await expect(panel).toContainText("마이크 권한을 확인하고 있어요");
+  await page.clock.fastForward(121_000);
+  await expect(panel.getByRole("button", { name: "음성 대화 시작" })).toBeDisabled();
+  await page.evaluate(() => (window as unknown as { expiryVoiceFixture: { resolveMic(): void } }).expiryVoiceFixture.resolveMic());
+  await expect.poll(() => page.evaluate(() => (window as unknown as { expiryVoiceFixture: { stops: number } }).expiryVoiceFixture.stops)).toBe(1);
+  expect(voiceRequests).toBe(0);
+});
