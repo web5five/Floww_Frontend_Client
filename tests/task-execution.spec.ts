@@ -64,6 +64,8 @@ async function setup(page:Page, mode: "normal"|"deny"|"stop"|"reject"="normal") 
     if(r.request().method()==="POST")posts.push(path);
     if(path==="/api/tasks")return r.fulfill({json:[task]});
     if(path.endsWith("/events"))return r.fulfill({json:{events:[],nextCursor:0,hasMore:false}});
+    if(path.endsWith("/quotes"))return r.fulfill({json:{taskId,mandateVersion:3,quotes:[{quoteId:"qt-b",merchantId:"pharmacy-b",itemName:"fixture B",totalAmountBaseUnits:"64000000",asset:task.mandate.asset,expiresAt:task.mandate.expiresAt,evidenceMode:"fixture"},{quoteId:"qt-c",merchantId:"pharmacy-c",itemName:"fixture C",totalAmountBaseUnits:"19000000",asset:task.mandate.asset,expiresAt:task.mandate.expiresAt,evidenceMode:"fixture"}]}});
+    if(path.endsWith("/attempts")){const b=r.request().postDataJSON();expect(b.proposedBy).toBe("USER");task.attempts[0].policy={decision:"DENY",reasonCode:b.quoteId==="qt-b"?"BUDGET_EXCEEDED":"RECIPIENT_NOT_ALLOWED",message:null};return r.fulfill({json:task.attempts[0]});}
     if(path.endsWith("/mandate/reject")||path.endsWith("/cancel")){task.status="CANCELLED";return r.fulfill({json:task});}
     if(path.endsWith("/orders")){task.attempts[0].order={orderId:taskId,status:"CREATED",paymentStatus:"PENDING"};task.status="EXECUTING";return r.fulfill({json:task.attempts[0].order});}
     if(path.includes("/account")){
@@ -118,6 +120,7 @@ test("actual client workflow uses verified approval, exact funding, payment and 
   await expect(p).toContainText("Task COMPLETED");expect(f.sends).toHaveLength(3);
   expect(f.posts.filter(x=>x.endsWith("/payment"))).toHaveLength(1);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await p.screenshot({path:`artifacts/execution-completed-fixture-${test.info().project.name}.png`,caret:"initial",timeout:60000});
 });
 test("DENY prevents prepare, signing and broadcast",async({page})=>{
   const f=await setup(page,"deny"),p=page.getByRole("region",{name:"실제 Sepolia 구매 실행"});
@@ -149,4 +152,26 @@ test("reload preserves pending hash and prevents duplicate deployment",async({pa
   await p.getByRole("button",{name:"계정·거래 상태 조회",exact:true}).click();
   await expect(p.getByRole("link",{name:"Sepolia 거래 확인 ↗",exact:true})).toHaveAttribute("href",`https://sepolia.etherscan.io/tx/${hash("1")}`);
   await expect(p.getByRole("button",{name:/Task Account 배포/})).toHaveCount(0);expect(f.sends).toHaveLength(1);
+});
+test("manual budget and recipient checks are USER attempts and never sign",async({page})=>{
+  const f=await setup(page,"deny"),p=page.locator("#server-task");
+  await p.getByRole("button",{name:"서버 약국 견적 조회",exact:true}).click();
+  for(const [index,reason] of [[0,"BUDGET_EXCEEDED"],[1,"RECIPIENT_NOT_ALLOWED"]] as const){
+    await p.getByRole("button",{name:"이 견적 정책 검사 · 수동",exact:true}).nth(index).click();
+    await expect(p).toContainText(`수동 견적 정책 검사 · DENY · ${reason}`);
+    await expect(p.getByRole("button",{name:"Mandate 확인 및 위임 승인 준비",exact:true})).toBeDisabled();
+  }
+  expect(f.sends).toHaveLength(0);expect(f.posts.filter(x=>x.endsWith("/attempts"))).toHaveLength(2);
+  expect(f.posts.some(x=>x.includes("/account/"))).toBe(false);
+});
+test("Task creation reuses the same idempotency key after a lost response and reload",async({page})=>{
+  const f=await setup(page),keys:string[]=[];
+  await page.route("**/api/tasks",async r=>{if(r.request().method()!=="POST")return r.fallback();keys.push(r.request().headers()["idempotency-key"]);if(keys.length===1)return r.fulfill({status:502,json:{reasonCode:"UPSTREAM_UNAVAILABLE"}});return r.fulfill({json:f.task});});
+  const deadline=new Date(Date.now()+6*3600000-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);
+  for(let i=0;i<2;i++){
+    await page.reload();const p=page.locator("#server-task");await p.getByLabel(/구매 기한/).fill(deadline);
+    await p.getByRole("button",{name:"서버 Task 생성",exact:true}).click();
+    if(i===0)await expect(p.getByRole("alert")).toContainText("UPSTREAM_UNAVAILABLE");else await expect(p).toContainText(taskId);
+  }
+  expect(keys).toHaveLength(2);expect(keys[0]).toBeTruthy();expect(keys[0]).toBe(keys[1]);
 });

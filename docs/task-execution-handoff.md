@@ -34,6 +34,16 @@ The Java APIs, DB, Kiln calls, Solidity account, executor/reporter and original 
 
 ## Environment names
 
+## Validation / 검증
+
+Local full regression: **112/112 passed**, Windows Chrome desktop/mobile. After adding request-key refresh recovery and manual USER DENY checks, **26/26 affected tests passed**. The initial CI exposed a test locator selecting hidden prerendered radios; the corrected test asserts one visible panel and three visible radios. Production-mode reproduction: **6/6 passed**. Final lint and Next production build (including TypeScript) passed. Ethers 6.17.0 audit reported zero vulnerabilities.
+
+The screenshot files labeled `execution-completed-fixture-*` show mocked responses, not public-chain evidence. Desktop/mobile layout was inspected and horizontal overflow is checked. Actual backend health/nonce observations are listed above; no live frontend wallet purchase was performed.
+
+PR: https://github.com/web5five/Floww_Frontend_Client/pull/8 . Final CI/merge status is available on the PR. The original root workspace and unrelated files were preserved; publication uses the separate client checkout based on main `a8a1f459`.
+
+## Environment names (server only)
+
 `FLOWW_API_BASE_URL`, `FLOWW_WALLET_AUTH_ENABLED`, `FLOWW_WALLET_AUTH_MODE`, `FLOWW_BUSINESS_JWT_ENABLED`, `FLOWW_WALLET_CHAIN_IDS`, `FLOWW_SESSION_SECRET`. `FLOWW_SERVER_DEV_TOKEN` is legacy development access only, never the authenticated Task execution identity. Optional `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` are generation-only and never browser variables.
 
 ## Remaining shared acceptance

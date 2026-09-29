@@ -18,12 +18,12 @@ export function TaskWorkspace() {
   </Card>;
 }
 function AuthenticatedTasks() {
+  const { auth } = useWallet();
   const [task, setTask] = useState<TaskView | null>(null), [list, setList] = useState<TaskView[]>([]);
   const [quotes, setQuotes] = useState<TaskQuote[]>([]), [events, setEvents] = useState<TaskEvent[]>([]);
   const [quoteVersion, setQuoteVersion] = useState<number | null>(null);
   const [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false), [stopped, setStopped] = useState(false), [poll, setPoll] = useState(false);
   const lock = useRef(false), stopLock = useRef(false), mounted = useRef(true);
-  const createKey = useRef<{ body: string; key: string } | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   async function run(job: () => Promise<void>) {
     if (lock.current || stopLock.current) return;
@@ -63,8 +63,12 @@ function AuthenticatedTasks() {
       event.preventDefault(); const data = new FormData(event.currentTarget);
       void run(async () => {
         const input = { goal: String(data.get("goal")), itemId: String(data.get("item")), maxAmountBaseUnits: toBaseUnits(String(data.get("budget"))), expiresAt: new Date(String(data.get("deadline"))).toISOString() };
-        const body = JSON.stringify(input); if (createKey.current?.body !== body) createKey.current = { body, key: crypto.randomUUID() };
-        const result = await tasks.create(input, createKey.current.key);
+        const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(input))))].map(b=>b.toString(16).padStart(2,"0")).join("");
+        const storageKey = `floww-task-request:${auth.session!.identity.address.toLowerCase()}:${digest}`;
+        let key = sessionStorage.getItem(storageKey);
+        if (!key) { key = crypto.randomUUID(); sessionStorage.setItem(storageKey,key); }
+        if (!mounted.current || stopLock.current) return;
+        const result = await tasks.create(input, key);
         if (!mounted.current || stopLock.current) return;
         setQuotes([]); setEvents([]); accept(result); setPoll(true); setNotice("서버 Task 생성됨 · Mandate 초안이며 위임 승인 아님");
       });

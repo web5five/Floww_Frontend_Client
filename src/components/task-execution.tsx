@@ -140,6 +140,6 @@ export function TaskExecution({ task, stopped, isStopped, onTask }: { task: Task
     </>}
     {pending && <div className="state-panel"><p>{pending.kind} · {pending.confirmed ? "영수증 확인됨" : "지갑 요청 확인 대기"}</p>{pending.hash ? <><a className="text-link" href={`https://sepolia.etherscan.io/tx/${pending.hash}`} target="_blank" rel="noreferrer">Sepolia 거래 확인 ↗</a>{!pending.confirmed && <button className="button secondary" disabled={disabled} onClick={()=>void run(receipt)}>지갑 거래 영수증 확인</button>}</> : <><p>응답을 받기 전까지 재전송을 차단합니다. 지갑 활동에서 해당 거래 해시를 찾으면 영수증을 검증하여 복구할 수 있습니다.</p><form onSubmit={event=>{event.preventDefault();const hash=String(new FormData(event.currentTarget).get("hash"));void run(async()=>{if(!/^0x[0-9a-f]{64}$/i.test(hash))throw new Error("올바른 거래 해시를 입력하세요.");save({...pending,hash});});}}><label className="field">지갑에서 확인한 거래 해시<input name="hash" required pattern="0x[0-9a-fA-F]{64}" /></label><button className="button secondary" disabled={disabled}>해시로 복구 · 재전송 없음</button></form></>}</div>}
     {busy && <p role="status">처리 중 · 중복 클릭과 자동 재시도 차단</p>}{notice && <p role="status">{notice}</p>}{error && <p role="alert">{error}</p>}
-    {stopped && <p role="alert">STOPPED · 승인·충전·지급·후속 실행 금지. 이미 제출된 거래는 취소되지 않습니다. 서버 취소와 온체인 권한 철회는 별도 확인이 필요합니다.</p>}
+    {stopped && <p role="alert">STOPPED · 승인·충전·지급·후속 실행 금지. 열려 있는 지갑 요청은 지갑에서 직접 거절하세요. 이미 제출된 거래는 취소되지 않습니다. 서버 취소와 온체인 권한 철회는 별도 확인이 필요합니다.</p>}
   </section>;
 }
