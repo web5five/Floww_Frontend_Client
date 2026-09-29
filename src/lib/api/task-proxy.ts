@@ -4,6 +4,7 @@ import { openSession, teamMode, businessJwtReady } from "../auth/team-session.ts
 
 const uuid = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 const idPath = new RegExp(`^${uuid}$`), eventPath = new RegExp(`^${uuid}/events$`);
+const accountPath = new RegExp(`^${uuid}/account$`);
 const mutationPath = new RegExp(`^${uuid}/(quotes|ai-proposal|mandate/reject|cancel)$`);
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const fail = (reasonCode: string, status: number) => Response.json({ reasonCode }, { status, headers });
@@ -21,7 +22,7 @@ function sanitize(value: unknown, token: string): unknown {
 }
 export async function taskProxy(request: Request, parts: string[]) {
   const path = parts.join("/"), url = new URL(request.url), post = request.method === "POST";
-  if (!(request.method === "GET" && (!path || idPath.test(path) || eventPath.test(path))) && !(post && (!path || mutationPath.test(path)))) return fail("ROUTE_NOT_ALLOWED", 404);
+  if (!(request.method === "GET" && (!path || idPath.test(path) || eventPath.test(path) || accountPath.test(path))) && !(post && (!path || mutationPath.test(path)))) return fail("ROUTE_NOT_ALLOWED", 404);
   const allowed = eventPath.test(path) ? ["after", "limit"] : !path && !post ? ["limit"] : [];
   for (const [key, value] of url.searchParams) {
     if (!allowed.includes(key) || url.searchParams.getAll(key).length !== 1 || !/^\d{1,15}$/.test(value) || !Number.isSafeInteger(Number(value)) || (key === "limit" && (Number(value) < 1 || Number(value) > (path ? 100 : 50)))) return fail("INVALID_INPUT", 400);

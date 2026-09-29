@@ -1,4 +1,5 @@
 import { isBaseUnits, type TaskView, type TaskInput, type TaskQuote, type TaskEventPage, type TaskAttempt } from "./task-types";
+import { parseAccountEvidence } from "./account-evidence";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const date = (v: unknown) => typeof v === "string" && v.endsWith("Z") && Number.isFinite(Date.parse(v));
 export const taskErrors: Record<string, string> = {
@@ -7,6 +8,7 @@ export const taskErrors: Record<string, string> = {
   BACKEND_ACCESS_PROTECTED: "백엔드 Preview 접근 보호 상태입니다. 공개 연동 주소 또는 서버 접근 설정이 필요합니다.",
   UPSTREAM_UNAVAILABLE: "서버 응답을 확인하지 못했습니다. 생성 결과는 내 작업 조회로 확인하세요. 모델 호출은 자동 재시도하지 않습니다.",
   INVALID_RESPONSE: "서버 응답이 현재 계약과 다릅니다. 실제 상태를 확인하기 전 실행하지 않습니다.",
+  CHAIN_NOT_READY: "이 작업의 Task Account가 아직 준비되지 않았거나 서버 체인 모드가 활성화되지 않았습니다.",
 };
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`/api/tasks${path}`, { ...init, cache: "no-store" });
@@ -20,6 +22,7 @@ function checkedTask(t: TaskView): TaskView {
 }
 const path = (id: string) => { if (!uuid.test(id)) throw new Error("Invalid task ID"); return `/${id}`; };
 export const tasks = {
+  account: (id: string, signal?: AbortSignal) => request<unknown>(`${path(id)}/account`, { signal }).then(value => parseAccountEvidence(value, id)),
   list: async (signal?: AbortSignal) => { const list = await request<TaskView[]>("?limit=20", { signal }); if (!Array.isArray(list)) throw new Error(taskErrors.INVALID_RESPONSE); return list.map(checkedTask); },
   get: (id: string, signal?: AbortSignal) => request<TaskView>(path(id), { signal }).then(checkedTask),
   create: (data: TaskInput, key: string) => request<TaskView>("", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": key }, body: JSON.stringify(data) }).then(checkedTask),

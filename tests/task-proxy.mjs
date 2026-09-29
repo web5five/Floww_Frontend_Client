@@ -22,6 +22,9 @@ try {
   assert.equal((await request('', 'GET', undefined, { Cookie: '' })).status,401);
   assert.equal((await request(id+'/mandate/confirm','POST',{})).status,404);
   assert.equal((await request(id+'/orders','POST',{})).status,404);
+  assert.equal((await request(id+'/account/payment','POST',{})).status,404);
+  assert.equal((await request(id+'/account/approve','POST',{})).status,404);
+  assert.equal((await request(id+'/account','POST',{})).status,404);
   assert.equal((await request(id+'/ai-proposal','POST',undefined,{Origin:'https://evil.example'})).status,403);
   assert.equal((await request(id+'/ai-proposal','POST',{})).status,400);
   const input={goal:'fixture',itemId:'acetaminophen-500mg-10',maxAmountBaseUnits:'60000000',expiresAt:new Date(Date.now()+86400000).toISOString()};
@@ -32,6 +35,8 @@ try {
   assert.equal(value.accessToken,undefined); assert.equal(value.reflected,'[REDACTED]'); assert.equal(value.tokenAddress,'0x'+'1'.repeat(40));
   assert.equal(calls[0].auth,'Bearer fixture-task-jwt'); assert.equal(calls[0].key,'fixture-task-key'); assert.equal(JSON.parse(calls[0].body).maxAmountBaseUnits,'60000000');
   assert.equal((await request(id+'/events?after=0&limit=50')).status,200);
+  assert.equal((await request(id+'/account')).status,200);
+  assert.equal(calls.at(-1).url,`/api/v1/tasks/${id}/account`);
   assert.equal((await request(id+'/ai-proposal','POST')).status,200); assert.equal(calls.at(-1).body,'');
   redirect=true; assert.equal((await request()).status,502);
   console.log('task proxy JWT, allowlist, exact amounts, idempotency, redaction and protected-preview checks passed');

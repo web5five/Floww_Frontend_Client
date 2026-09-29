@@ -258,3 +258,79 @@ fieldset:disabled { opacity:1; }
   .trade-actions .button { flex-basis:100%; }
   .floating-chip { max-width:100%; white-space:normal; }
 }
+
+/* Purchase studio: decisions first, technical details on demand. */
+.voice-guide { padding:20px 24px; border:1px solid #dfe6fb; border-radius:22px; background:#f0f4ff; margin:24px 0; }
+.voice-controls { display:flex; flex-wrap:wrap; align-items:center; gap:14px; }
+.voice-controls>div { flex:1; min-width:160px; }.voice-controls p { margin:4px 0 0; font-size:14px; color:#475569; }
+.voice-icon { color:#4261ff; display:grid; place-items:center; }.voice-controls strong { font-size:17px; }
+.studio-nav { display:flex; gap:8px; flex-wrap:wrap; padding:8px; border:1px solid #e3e8f5; background:white; border-radius:18px; margin:0 0 28px; }
+.studio-nav a { padding:12px 18px; border-radius:12px; color:#35415d; font-size:15px; }
+.studio-nav a:hover,.studio-nav a:focus-visible { background:#edf1ff; color:#304edf; }
+.purchase-overview { background:linear-gradient(115deg,#304dde,#4261ff); color:white; border-radius:26px; padding:30px; box-shadow:0 14px 32px #4261ff24; }
+.request-lead { display:flex; align-items:center; gap:18px; }
+.studio-icon { display:grid; place-items:center; width:64px; height:64px; flex-shrink:0; background:#ffff5c; border-radius:20px; color:#233591; }
+.request-lead h2 { font-size:26px; margin:10px 0 6px; letter-spacing:-.7px; }
+.request-lead p { margin:0; color:#fff; font-size:16px; }
+.purchase-studio .eyebrow { font-size:13px; letter-spacing:1.2px; }
+.overview-metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:28px; }
+.overview-metrics>div { display:grid; grid-template-columns:24px 1fr; align-items:center; gap:8px 10px; border-top:1px solid #ffffff55; padding-top:20px; }
+.overview-metrics strong { grid-column:2; font-size:30px; line-height:1.2; }
+.overview-metrics small { font-size:14px; }
+.studio-details { margin-top:18px; border-top:1px solid #e3e8f5; padding-top:14px; font-size:15px; }
+.studio-details summary { cursor:pointer; min-height:28px; font-weight:700; }
+.studio-details p { font-size:15px; margin:12px 0 0; overflow-wrap:anywhere; }
+.purchase-overview .studio-details { border-color:#ffffff55; }
+.purchase-stepper { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; padding:24px 0; list-style:none; margin:0; color:#475569; }
+.purchase-stepper li { display:flex; align-items:center; gap:10px; font-size:14px; }
+.purchase-stepper li>span { width:30px; height:30px; display:grid; place-items:center; flex-shrink:0; background:#e5eaf4; border-radius:50%; }
+.purchase-stepper .active { color:#304bdb; }
+.purchase-stepper .active>span { background:#4261ff; color:white; }
+.quote-heading { display:flex; align-items:center; gap:12px; }
+.quote-heading h3 { margin:0 0 5px; font-size:21px; }
+.merchant-monogram { width:48px; height:48px; display:grid; place-items:center; border-radius:15px; background:#edf1ff; color:#3654df; font-size:24px; flex-shrink:0; }
+.quote-state { color:#28543d; font-size:14px; }
+.quote-state.blocked { color:#a32d38; }
+.selection-check { color:#4261ff; margin-left:auto; flex-shrink:0; }
+.quote-price { font-size:46px; letter-spacing:-2px; line-height:1.2; margin:28px 0 4px; }
+.quote-price>span { font-size:17px; letter-spacing:0; margin-left:8px; color:#475569; }
+.quote-caption { margin:0 0 22px; font-size:14px; color:#475569; }
+.quote-policy { display:flex; gap:8px; align-items:center; padding:12px; margin-top:18px; border-radius:12px; background:#f1f6ff; color:#354ba8; font-size:14px; }
+.quote-policy svg { flex-shrink:0; }
+.quote-policy.blocked { background:#fff1f2; color:#a32d38; }
+.purchase-studio .section-heading h2 { font-size:22px; margin:8px 0; }
+.review-layout { display:grid; grid-template-columns:1.2fr 1fr; gap:22px; }
+.review-layout .purchase-details { font-size:15px; gap:12px; }
+.purchase-status .purchase-details>div { border-bottom:1px solid #edf0f7; padding-bottom:10px; }
+.purchase-status .purchase-details { margin-top:20px; }
+.purchase-studio [id] { scroll-margin-top:24px; }
+.compact-guide summary { display:flex; justify-content:space-between; align-items:center; gap:16px; cursor:pointer; font-size:18px; list-style:none; }
+.compact-guide summary::after { content:'+'; font-size:28px; color:#4261ff; }
+.compact-guide[open] summary::after { content:'−'; }
+.compact-guide summary::-webkit-details-marker { display:none; }
+.evidence-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:24px; }
+.evidence-item { display:flex; align-items:center; gap:12px; background:#f5f7fc; border-radius:14px; padding:16px; }
+.evidence-item>span { color:#4261ff; font-size:20px; }
+.evidence-item strong { display:block; font-size:15px; }
+.evidence-item small { display:block; color:#475569; font-size:14px; margin-top:4px; }
+#pharmacy-policy fieldset { border:0; padding:0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+#pharmacy-policy fieldset .field { border:1px solid #dfe6f5; border-radius:16px; padding:16px; cursor:pointer; background:#f8faff; }
+#pharmacy-policy fieldset .field:has(input:checked) { border-color:#4261ff; background:#edf1ff; }
+#pharmacy-policy input[type="radio"] { width:18px; height:18px; min-height:0; padding:0; margin:0 5px 0 0; accent-color:#4261ff; vertical-align:middle; }
+@media(max-width:1000px) {
+  .review-layout { grid-template-columns:1fr; }
+  .purchase-studio .pharmacy-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+  .quote-card { padding:20px; }
+}
+@media(max-width:760px) {
+  .studio-nav { gap:2px; }.studio-nav a { padding:10px 12px; font-size:14px; }
+  .purchase-overview { padding:24px; }.request-lead { align-items:flex-start; }
+  .request-lead h2 { font-size:22px; }.studio-icon { width:46px; height:46px; border-radius:14px; }
+  .overview-metrics { grid-template-columns:1fr; gap:14px; }.overview-metrics>div { grid-template-columns:24px 1fr auto; padding-top:14px; }.overview-metrics strong { grid-column:3; font-size:23px; }
+  .purchase-stepper { grid-template-columns:repeat(2,1fr); gap:18px 8px; }
+  .purchase-studio .pharmacy-grid,.evidence-grid { grid-template-columns:1fr; }
+  #pharmacy-policy fieldset { grid-template-columns:1fr; }
+  .quote-card { padding:26px; }.quote-price { font-size:44px; }
+  .review-layout .card { padding:24px; }.compact-guide summary { flex-wrap:wrap; }
+}
+@media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; }.button { transition:none; } }
