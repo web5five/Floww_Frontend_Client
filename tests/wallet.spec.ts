@@ -61,6 +61,34 @@ test("wallet discovery, rejection, connection, change and disconnect never authe
   await page.reload();
   await expect(page.getByRole("button", { name: "지갑 선택", exact: true })).toBeEnabled();
 });
+test("closing a pending connection never opens login or signs automatically", async ({ page }) => {
+  await page.addInitScript(() => {
+    const address = "0x1111111111111111111111111111111111111111";
+    let release: (() => void) | undefined;
+    const calls: string[] = [];
+    Object.assign(window, { pendingWallet: { calls, release: () => release?.() } });
+    const provider = {
+      request: async ({ method }: { method: string }) => {
+        calls.push(method);
+        if (method === "eth_requestAccounts") await new Promise<void>(resolve => { release = resolve; });
+        if (method === "eth_chainId") return "0x1";
+        return [address];
+      },
+      on: () => {}, removeListener: () => {},
+    };
+    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "pending-wallet", name: "Pending Wallet" }, provider } })));
+  });
+  await page.goto("/login");
+  await page.getByRole("button", { name: "지갑 선택", exact: true }).click();
+  await page.getByRole("button", { name: /Pending Wallet.*이 브라우저에서 감지됨/ }).click();
+  await page.getByRole("button", { name: "Pending Wallet 연결", exact: true }).click();
+  await page.getByRole("button", { name: "닫기", exact: true }).first().click();
+  await page.evaluate(() => (window as unknown as { pendingWallet: { release(): void } }).pendingWallet.release());
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByText("Pending Wallet 연결됨", { exact: true })).toBeVisible();
+  const calls = await page.evaluate(() => (window as unknown as { pendingWallet: { calls: string[] } }).pendingWallet.calls);
+  expect(calls).not.toContain("personal_sign");
+});
 test("wallet login is readable without horizontal overflow", async ({ page }) => {
   await page.goto("/login");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

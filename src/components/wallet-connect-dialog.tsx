@@ -16,6 +16,7 @@ const providers = [
 
 export function WalletConnectDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const intent = useRef(0);
   const { wallets, connection, busy, notice, connect, discover } = useWallet();
   const { connectors, connectAsync } = useConnect();
   const [choice, setChoice] = useState<Choice | null>(null);
@@ -23,7 +24,7 @@ export function WalletConnectDialog({ open, onClose }: { open: boolean; onClose(
   const [sdkBusy, setSdkBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  function closeDialog() { setChoice(null); setDevice("desktop"); setError(""); setCopied(false); onClose(); }
+  function closeDialog() { intent.current++; setChoice(null); setDevice("desktop"); setError(""); setCopied(false); onClose(); }
   useEffect(() => {
     if (open && !dialog.current?.open) dialog.current?.showModal();
     if (!open && dialog.current?.open) dialog.current.close();
@@ -39,13 +40,14 @@ export function WalletConnectDialog({ open, onClose }: { open: boolean; onClose(
   const sdkConnector = connectors.find(c => c.id === "walletConnect");
   async function requestConnection() {
     if (!choice || busy || sdkBusy) return;
+    const request = ++intent.current;
     setError("");
     if (choice === "walletconnect") {
       if (!projectId || !sdkConnector) { setError("현재 WalletConnect 연결이 준비되지 않았습니다. 지갑 앱의 브라우저에서 Floww를 열어 주세요."); return; }
       setSdkBusy(true);
       try { await connectAsync({ connector: sdkConnector }); }
-      catch (cause) { setError(walletError(cause)); }
-      finally { setSdkBusy(false); }
+      catch (cause) { if (request === intent.current) setError(walletError(cause)); }
+      finally { if (request === intent.current) setSdkBusy(false); }
       return;
     }
     if (!wallet) { setError("이 브라우저에서 해당 지갑을 찾지 못했습니다. 지갑을 설치하거나 지갑 앱의 브라우저에서 열어 주세요."); return; }
@@ -57,7 +59,7 @@ export function WalletConnectDialog({ open, onClose }: { open: boolean; onClose(
   }
   return <dialog ref={dialog} className={styles.dialog} aria-labelledby="wallet-dialog-title" onCancel={closeDialog} onClose={closeDialog}>
     <div className={styles.dialogTop}>
-      <button type="button" className={styles.back} onClick={() => choice ? (setChoice(null), setError("")) : closeDialog()}>{choice ? "← 지갑 목록" : "닫기"}</button>
+      <button type="button" className={styles.back} onClick={() => choice ? (intent.current++, setChoice(null), setError("")) : closeDialog()}>{choice ? "← 지갑 목록" : "닫기"}</button>
       <button type="button" className={styles.close} aria-label="닫기" onClick={closeDialog}>×</button>
     </div>
     {!choice ? <>
