@@ -14,15 +14,17 @@ test("task boundary rejects spending routes and preserves exact amounts", () => 
 test("pharmacy rehearsal separates DENY, review and actual evidence", async ({ page }) => {
   const posts: string[] = []; page.on("request", r => { if (r.method() === "POST") posts.push(r.url()); });
   await page.goto("/pharmacy");
-  const panel = page.locator("#pharmacy-policy");
-  await panel.getByLabel(/예산 초과/).check();
+  const panel = page.locator("#pharmacy-policy:visible");
+  await expect(panel).toHaveCount(1);
+  await expect(panel.getByRole("radio")).toHaveCount(3);
+  await panel.getByRole("radio", { name: /예산 초과/ }).check();
   await panel.getByRole("button", { name: "로컬 정책 검사", exact: true }).click();
   await expect(panel.getByRole("status")).toContainText("DENY");
   await expect(panel.getByRole("button", { name: /승인 흐름 연습/ })).toBeDisabled();
-  await panel.getByLabel(/잘못된 수신자/).check();
+  await panel.getByRole("radio", { name: /잘못된 수신자/ }).check();
   await panel.getByRole("button", { name: "로컬 정책 검사", exact: true }).click();
   await expect(panel.getByRole("list", { name: "리허설 기록" })).toContainText("RECIPIENT_NOT_ALLOWED");
-  await panel.getByLabel(/정상 조건/).check();
+  await panel.getByRole("radio", { name: /정상 조건/ }).check();
   await panel.getByRole("button", { name: "로컬 정책 검사", exact: true }).click();
   await panel.getByRole("button", { name: /승인 흐름 연습/ }).evaluate((b: HTMLButtonElement) => { b.click(); b.click(); });
   await expect(panel.getByRole("listitem")).toHaveCount(4);

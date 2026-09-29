@@ -14,6 +14,7 @@ interface WalletContextValue {
   connect(wallet: WalletOption): Promise<void>;
   disconnect(): void;
   discover(): void;
+  requestForOwner(owner: string, method: string, params?: unknown[], allowed?: () => boolean): Promise<unknown>;
 }
 const WalletContext = createContext<WalletContextValue | null>(null);
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -92,7 +93,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }
   const login = async () => { if (connection && selected.current) await auth.login(connection, selected.current.provider); };
-  return <WalletContext.Provider value={{ auth, login, wallets, connection, busy, notice, connect, disconnect, discover }}>{children}</WalletContext.Provider>;
+  async function requestForOwner(owner: string, method: string, params: unknown[] = [], allowed: () => boolean = () => true) {
+    const wallet = selected.current, revision = serial.current;
+    const session = auth.session;
+    if (!wallet || !session || session.identity.address.toLowerCase() !== owner.toLowerCase() || !allowed()) throw new Error("지갑 로그인과 연결을 확인하세요.");
+    const address = account(await wallet.provider.request({ method: "eth_accounts" }));
+    const network = chain(await wallet.provider.request({ method: "eth_chainId" }));
+    if (revision !== serial.current || address?.toLowerCase() !== owner.toLowerCase() || !network || BigInt(network) !== BigInt(11155111) || !allowed()) throw new Error("지갑 계정·Sepolia 네트워크 변경 또는 STOP으로 요청을 차단했습니다.");
+    // Return transaction hashes even when disconnect happens during the wallet popup:
+    // callers persist them before checking STOP again, preventing duplicate sends.
+    return wallet.provider.request({ method, params });
+  }
+  return <WalletContext.Provider value={{ auth, login, wallets, connection, busy, notice, connect, disconnect, discover, requestForOwner }}>{children}</WalletContext.Provider>;
 }
 export function useWallet() {
   const value = useContext(WalletContext);

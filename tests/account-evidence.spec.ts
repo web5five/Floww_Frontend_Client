@@ -12,6 +12,7 @@ test("hashes, paid state and Task label do not replace verified fulfillment", ()
   for (const change of [{taskId:"another-task"},{amountBaseUnits:23500000},{amountBaseUnits:(BigInt(1)<<BigInt(256)).toString()},{paymentTxHash:"javascript:alert(1)"}]) expect(()=>parseAccountEvidence({...sample,...change},id)).toThrow();
 });
 test("account evidence renders unknown and verified server states without mutations", async ({ page }) => {
+  const errors: string[]=[];page.on("console",m=>{if(m.type()==="error")errors.push(m.text());});page.on("pageerror",e=>errors.push(e.message));
   const task = {taskId:id,status:"COMPLETED",mandate:{mandateId:id,version:1,status:"CONFIRMED",maxAmountBaseUnits:"60000000",consumedBaseUnits:"23500000",remainingBaseUnits:"36500000",asset:{tokenDecimals:6,chainId:11155111,tokenAddress:sample.tokenAddress},expiresAt:"2026-10-01T00:00:00Z"},attempts:[],updatedAt:"2026-09-30T00:00:00Z"};
   let evidence = {...sample};
   const posts: string[]=[];page.on("request",r=>{if(r.method()==="POST")posts.push(r.url());});
@@ -28,5 +29,6 @@ test("account evidence renders unknown and verified server states without mutati
   await panel.getByRole("button",{name:"서버 결제 증거 조회",exact:true}).click();
   await expect(panel.getByRole("status")).toContainText("서버 결제·이행 검증 완료");
   await expect(panel.getByText(/약국 수령 결과는 시뮬레이션/)).toBeVisible();
+  expect(errors).toEqual([]);
   expect(posts).toEqual([]);
 });

@@ -7,22 +7,23 @@ import { tasks } from "@/lib/api/task-client";
 import { toBaseUnits, type TaskView, type TaskQuote, type TaskEvent } from "@/lib/api/task-types";
 import { formatFusdc } from "@/lib/pharmacy-preview";
 import { AccountEvidence } from "./account-evidence";
+import { TaskExecution } from "./task-execution";
 
 export function TaskWorkspace() {
   const { auth } = useWallet();
   return <Card id="server-task" className="pharmacy-section"><div className="section-heading"><h2>서버 Task · 실제 API 연결</h2><span className="tag">서버 응답 전용 · 데모와 분리</span></div>
-    <p className="form-note">구매 요청부터 견적·AI 제안·정책 결과를 확인하세요. 모델 호출은 비용이 발생할 수 있습니다. 새 Task Account 결제 증거 조회를 지원하며, 이 앱의 지갑 지출 실행은 연결 검증 대기입니다.</p>
+    <p className="form-note">구매 요청부터 견적·AI 제안·정책 결과·위임 승인·Sepolia 지급·이행 증거를 확인하세요. 모델 호출과 지갑 거래는 비용이 발생할 수 있으며 각 단계에서 직접 확인합니다.</p>
     {auth.session ? <AuthenticatedTasks key={auth.session.identity.address} /> : <><p>지갑 로그인 후 서버 작업을 생성하거나 조회할 수 있습니다. 환경설정이 없으면 로그인 화면에 연결 전 상태가 표시됩니다.</p><Link href="/login" className="button primary">지갑 로그인으로 이동</Link></>}
     <Link href="/dashboard#backend-workspace" className="text-link">추가 질문·AI 초안 및 기존 실행 API 화면 ↗</Link>
   </Card>;
 }
 function AuthenticatedTasks() {
+  const { auth } = useWallet();
   const [task, setTask] = useState<TaskView | null>(null), [list, setList] = useState<TaskView[]>([]);
   const [quotes, setQuotes] = useState<TaskQuote[]>([]), [events, setEvents] = useState<TaskEvent[]>([]);
   const [quoteVersion, setQuoteVersion] = useState<number | null>(null);
   const [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false), [stopped, setStopped] = useState(false), [poll, setPoll] = useState(false);
   const lock = useRef(false), stopLock = useRef(false), mounted = useRef(true);
-  const createKey = useRef<{ body: string; key: string } | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   async function run(job: () => Promise<void>) {
     if (lock.current || stopLock.current) return;
@@ -36,6 +37,7 @@ function AuthenticatedTasks() {
     if (!poll || !taskId || stopped) return;
     const controller = new AbortController(); let timer: ReturnType<typeof setTimeout>; let cursor = 0;
     async function tick() {
+      if (document.hidden) { timer = setTimeout(tick, 5000); return; }
       try {
         const [next, page] = await Promise.all([tasks.get(taskId!, controller.signal), tasks.events(taskId!, cursor, controller.signal)]);
         if (controller.signal.aborted || stopLock.current) return;
@@ -61,8 +63,12 @@ function AuthenticatedTasks() {
       event.preventDefault(); const data = new FormData(event.currentTarget);
       void run(async () => {
         const input = { goal: String(data.get("goal")), itemId: String(data.get("item")), maxAmountBaseUnits: toBaseUnits(String(data.get("budget"))), expiresAt: new Date(String(data.get("deadline"))).toISOString() };
-        const body = JSON.stringify(input); if (createKey.current?.body !== body) createKey.current = { body, key: crypto.randomUUID() };
-        const result = await tasks.create(input, createKey.current.key);
+        const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(input))))].map(b=>b.toString(16).padStart(2,"0")).join("");
+        const storageKey = `floww-task-request:${auth.session!.identity.address.toLowerCase()}:${digest}`;
+        let key = sessionStorage.getItem(storageKey);
+        if (!key) { key = crypto.randomUUID(); sessionStorage.setItem(storageKey,key); }
+        if (!mounted.current || stopLock.current) return;
+        const result = await tasks.create(input, key);
         if (!mounted.current || stopLock.current) return;
         setQuotes([]); setEvents([]); accept(result); setPoll(true); setNotice("서버 Task 생성됨 · Mandate 초안이며 위임 승인 아님");
       });
@@ -73,10 +79,10 @@ function AuthenticatedTasks() {
       <dl className="purchase-details"><div><dt>Task ID / 서버 상태</dt><dd>{task.taskId} · {task.status}</dd></div><div><dt>Mandate / 버전</dt><dd>{task.mandate.mandateId} · v{task.mandate.version} · {task.mandate.status}</dd></div><div><dt>서버 한도 / 남은 예산</dt><dd>{formatFusdc(task.mandate.maxAmountBaseUnits)} / {formatFusdc(task.mandate.remainingBaseUnits)}</dd></div><div><dt>서버 자산 / 체인</dt><dd>{task.mandate.asset.tokenAddress} · {task.mandate.asset.chainId}</dd></div><div><dt>기한</dt><dd>{new Date(task.mandate.expiresAt).toLocaleString("ko-KR")}</dd></div></dl>
       <div className="api-actions"><button className="button secondary" disabled={busy || stopped || task.status !== "AWAITING_APPROVAL"} onClick={() => void run(async () => { const q = await tasks.quotes(task.taskId); if (mounted.current && !stopLock.current && q.mandateVersion === task.mandate.version) { setQuotes(q.quotes); setQuoteVersion(q.mandateVersion); } })}>서버 약국 견적 조회</button><button className="button primary" disabled={busy || stopped || task.status !== "AWAITING_APPROVAL"} onClick={() => void run(async () => { const result = await tasks.proposal(task.taskId); if (!mounted.current || stopLock.current) return; setNotice(`AI 서버 결과: ${result.proposal.status} · ${result.proposal.reasonCode ?? ""} / 정책: ${result.attempt?.policy.decision ?? "미판정"}. 승인 아님`); accept(await tasks.get(task.taskId)); })}>Kiln 제안 요청 · 비용 발생 가능</button><button className="button secondary" disabled={busy || stopped} onClick={() => { setError(""); setPoll(true); }}>상태 조회 재개</button><button className="button danger" disabled={stopped} onClick={() => void stop()}>에이전트 즉시 중단(STOP)</button></div>
       <p className="form-note">이 서버의 약국 결과는 시뮬레이터입니다. 수취 주소는 서버 설정값이며 실제 지급 가능 주소로 검증됐다는 뜻이 아닙니다. 수동 후보 선택을 AI 선택으로 표시하지 않습니다.</p>
-      <div className="pharmacy-grid">{(quoteVersion === task.mandate.version ? quotes : []).map(q => <Card key={q.quoteId}><h3>{q.merchantName}</h3><p>{q.itemName}</p><p>{formatFusdc(q.totalAmountBaseUnits)}</p><p className="form-note">{q.quoteId} · {q.evidenceMode}<br />유효 기한: {new Date(q.expiresAt).toLocaleString("ko-KR")}</p></Card>)}</div>
+      <div className="pharmacy-grid">{(quoteVersion === task.mandate.version ? quotes : []).map(q => <Card key={q.quoteId}><h3>{q.merchantName ?? q.merchantId}</h3><p>{q.itemName}</p><p>{formatFusdc(q.totalAmountBaseUnits)}</p><p className="form-note">{q.quoteId} · {q.evidenceMode}<br />유효 기한: {new Date(q.expiresAt).toLocaleString("ko-KR")}</p><button className="button secondary" disabled={busy || stopped || task.status!=="AWAITING_APPROVAL"} onClick={()=>void run(async()=>{const result=await tasks.attempt(task.taskId,q.quoteId);if(!mounted.current||stopLock.current)return;setNotice(`수동 견적 정책 검사 · ${result.policy.decision} · ${result.policy.reasonCode??""}. AI 선택·구매 승인이 아닙니다.`);accept(await tasks.get(task.taskId));})}>이 견적 정책 검사 · 수동</button></Card>)}</div>
       {task.attempts.map(a => <Card key={a.attemptId}><div className="section-heading"><h3>{a.merchantId} · {a.policy.decision}</h3><span className="tag">{a.status}</span></div><p>{a.policy.reasonCode} {a.policy.message?.ko}</p><p>{formatFusdc(a.amountBaseUnits)} · 지급 상태: {a.payment.status}</p><p className="form-note">{a.payment.txHash ? `서버 보고 해시: ${a.payment.txHash} · 영수증/이행 검증은 별도` : "거래 해시 없음 · 이것만으로 no-broadcast 증명을 대신하지 않습니다."}</p></Card>)}
-      <button className="button primary" disabled>Mandate 확인 및 위임 승인 · 지갑 실행 연결 대기</button>
-      <AccountEvidence key={task.taskId} taskId={task.taskId} taskStatus={task.status} />
+      <TaskExecution key={`execution-${task.taskId}`} task={task} stopped={stopped} isStopped={() => stopLock.current} onTask={accept} />
+      <AccountEvidence key={`evidence-${task.taskId}`} taskId={task.taskId} taskStatus={task.status} />
       <h3>서버 이벤트 · {poll ? "5초 간격 조회" : "조회 중지"}</h3><ol className="purchase-events">{events.map(e => <li key={e.seq}><div><strong>{e.kind} · {e.state}</strong><p>{e.reasonCode} · {e.actor}</p><time dateTime={e.createdAt}>{new Date(e.createdAt).toLocaleString("ko-KR")}</time></div></li>)}</ol>
     </>}
   </>;
