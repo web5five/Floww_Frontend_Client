@@ -1,0 +1,6 @@
+@media(max-width:600px) {
+  .header { display:grid; grid-template-columns:1fr auto; gap:16px; }
+  .header > a { grid-column:1; grid-row:1; }
+  .header > button { grid-column:2; grid-row:1; justify-self:end; margin:0; }
+  .header > nav { grid-column:1 / -1; grid-row:2; justify-content:center; width:100%; }
+}

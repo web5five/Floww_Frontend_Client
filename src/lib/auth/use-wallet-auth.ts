@@ -43,8 +43,16 @@ export function useWalletAuth() {
   }, []);
   useEffect(() => {
     if (!session) return;
-    const timer = setTimeout(() => { setSession(null); setError("로그인 세션이 만료되었습니다. 다시 로그인해 주세요."); }, Math.max(0, Date.parse(session.expiresAt) - Date.now()));
-    return () => clearTimeout(timer);
+    const expire = () => {
+      if (Date.parse(session.expiresAt) <= Date.now()) {
+        serial.current++;
+        setSession(null); setError("로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
+      }
+    };
+    const timer = setTimeout(expire, Math.max(0, Date.parse(session.expiresAt) - Date.now()));
+    window.addEventListener("focus", expire);
+    document.addEventListener("visibilitychange", expire);
+    return () => { clearTimeout(timer); window.removeEventListener("focus", expire); document.removeEventListener("visibilitychange", expire); };
   }, [session]);
   async function logout() {
     if (loggingOut.current) return;
