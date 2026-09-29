@@ -17,6 +17,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - run: node --conditions=react-server --experimental-strip-types tests/voice-agent-contract.mjs
+      - run: node --experimental-strip-types tests/voice-agent-lifecycle.mjs
       - run: npm run build
       - run: npx playwright install --with-deps chrome
       - name: Verify purchase execution and policy boundaries
@@ -28,4 +30,4 @@ jobs:
             if curl --fail --silent http://127.0.0.1:3001/ > /dev/null; then break; fi
             sleep 1
           done
-          npm run test:e2e -- tests/task-execution.spec.ts tests/task-journey.spec.ts tests/account-evidence.spec.ts --timeout=60000
+          npm run test:e2e -- --timeout=60000

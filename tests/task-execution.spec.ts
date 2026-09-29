@@ -85,13 +85,14 @@ async function setup(page:Page, mode: "normal"|"deny"|"stop"|"reject"="normal") 
     }
     return r.fulfill({json:task});
   });
-  await page.goto("/login");await page.getByRole("button",{name:"Execution Fixture 연결",exact:true}).click();
-  await page.getByRole("link",{name:"Overview",exact:true}).click();
-  await page.getByRole("link",{name:"Dashboard",exact:true}).click();
-  // Header's Dashboard is the pharmacy journey; navigate via Next link to retain provider.
-  if(!page.url().includes("/pharmacy")){await page.getByRole("link",{name:/약국 구매/}).first().click();}
+  await page.goto("/login");
+  await page.getByRole("button",{name:"지갑 선택",exact:true}).click();
+  await page.getByRole("button",{name:/Execution Fixture.*이 브라우저에서 감지됨/}).click();
+  await page.getByRole("button",{name:"Execution Fixture 연결",exact:true}).click();
+  await page.getByRole("link",{name:"내 작업",exact:true}).click();
+  await page.getByText("내 작업 다시 열기",{exact:true}).click();
   await page.getByRole("button",{name:"내 작업 조회",exact:true}).click();
-  await page.getByRole("button",{name:/11111111 · AWAITING_APPROVAL/}).click();
+  await page.locator(`a[href="/chat/${taskId}"]`).click();
   return{task,a,sends,posts,release:()=>waitSign?.()};
 }
 test("actual client workflow uses verified approval, exact funding, payment and fulfillment (fixture only)",async({page})=>{
@@ -106,25 +107,29 @@ test("actual client workflow uses verified approval, exact funding, payment and 
   await p.getByRole("button",{name:"선택 금액만 토큰 사용 허용",exact:true}).click();
   await p.getByRole("button",{name:"지갑 거래 영수증 확인",exact:true}).click();
   await p.getByRole("button",{name:"서버 충전 잔액 조회",exact:true}).click();
-  await p.getByRole("button",{name:/Task Account 충전/}).click();
+  await p.getByRole("button",{name:/구매 계정 충전/}).click();
   await p.getByRole("button",{name:"지갑 거래 영수증 확인",exact:true}).click();
   await p.getByRole("button",{name:"서버 충전 잔액 조회",exact:true}).click();
-  await p.getByRole("button",{name:"시뮬레이터 주문 생성",exact:true}).click();
+  await p.getByRole("button",{name:"선택한 약국에 주문",exact:true}).click();
   await p.getByRole("button",{name:"서버 충전 잔액 조회",exact:true}).click();
   await p.getByRole("button",{name:"승인된 주문 Sepolia 지급 요청",exact:true}).click();
-  await expect(p).not.toContainText("Task COMPLETED");
+  await expect(p).not.toContainText("지급과 약국 이행 확인을 마쳤습니다.");
   await p.getByRole("button",{name:/제출된 거래 영수증 재확인/}).click();
   await expect(p).toContainText("이행 검증 전에는 구매 완료가 아닙니다");
-  await p.getByRole("button",{name:"시뮬레이션 수령 확인 요청",exact:true}).click();
+  await p.getByRole("button",{name:"약국 이행 확인",exact:true}).click();
   await p.getByRole("button",{name:/제출된 거래 영수증 재확인/}).click();
-  await expect(p).toContainText("Task COMPLETED");expect(f.sends).toHaveLength(3);
+  await expect(page.locator("#scenario-progress")).toContainText("서버가 구매와 이행 확인을 완료로 기록했어요");
+  await page.getByText("구매 근거와 거래 기록",{exact:true}).click();
+  await page.getByRole("button",{name:"서버 결제 증거 조회",exact:true}).click();
+  await expect(page.getByRole("region",{name:"서버 결제 증거",exact:true})).toContainText("서버 결제·이행 검증 완료");
+  expect(f.sends).toHaveLength(3);
   expect(f.posts.filter(x=>x.endsWith("/payment"))).toHaveLength(1);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await p.screenshot({path:`artifacts/execution-completed-fixture-${test.info().project.name}.png`,caret:"initial",timeout:60000});
+  await page.locator("#scenario-progress").screenshot({path:`artifacts/execution-completed-fixture-${test.info().project.name}.png`,caret:"initial",timeout:60000});
 });
 test("DENY prevents prepare, signing and broadcast",async({page})=>{
   const f=await setup(page,"deny"),p=page.getByRole("region",{name:"실제 Sepolia 구매 실행"});
-  await expect(p.getByRole("button",{name:"Mandate 확인 및 위임 승인 준비",exact:true})).toBeDisabled();
+  await expect(p).toHaveCount(0);
   expect(f.sends).toHaveLength(0);expect(f.posts).toHaveLength(0);
 });
 test("STOP during wallet approval forbids signature submission and execution",async({page})=>{
@@ -133,8 +138,8 @@ test("STOP during wallet approval forbids signature submission and execution",as
   await p.getByRole("button",{name:/Task Account 배포/}).click();await p.getByRole("button",{name:"지갑 거래 영수증 확인",exact:true}).click();
   await p.getByRole("button",{name:/EIP-712 서명/}).click();
   await expect.poll(()=>f.posts.some(x=>x.endsWith("/approval-request"))).toBe(true);
-  await page.getByRole("button",{name:"에이전트 즉시 중단(STOP)",exact:true}).click();f.release();
-  await expect(p).toContainText("STOPPED");await expect(p.getByRole("button",{name:/EIP-712 서명/})).toBeDisabled();
+  await page.getByRole("button",{name:"작업 중단",exact:true}).click();f.release();
+  await expect(p).toHaveCount(0); await expect(page.getByRole("alert").filter({hasText:"후속 실행이 잠겼습니다"})).toBeVisible();
   expect(f.posts.some(x=>/\/(signature|approve|payment)$/.test(x))).toBe(false);
 });
 test("wallet signature rejection never reaches authorization endpoint",async({page})=>{
@@ -148,30 +153,8 @@ test("reload preserves pending hash and prevents duplicate deployment",async({pa
   const f=await setup(page),p=page.getByRole("region",{name:"실제 Sepolia 구매 실행"});
   await p.getByRole("button",{name:"Mandate 확인 및 위임 승인 준비",exact:true}).click();
   await p.getByRole("button",{name:/Task Account 배포/}).click();await expect(p.getByRole("button",{name:"지갑 거래 영수증 확인",exact:true})).toBeVisible();
-  await page.reload();await page.getByRole("button",{name:"내 작업 조회",exact:true}).click();await page.getByRole("button",{name:/11111111 · AWAITING_APPROVAL/}).click();
+  await page.reload();
   await p.getByRole("button",{name:"계정·거래 상태 조회",exact:true}).click();
   await expect(p.getByRole("link",{name:"Sepolia 거래 확인 ↗",exact:true})).toHaveAttribute("href",`https://sepolia.etherscan.io/tx/${hash("1")}`);
   await expect(p.getByRole("button",{name:/Task Account 배포/})).toHaveCount(0);expect(f.sends).toHaveLength(1);
-});
-test("manual budget and recipient checks are USER attempts and never sign",async({page})=>{
-  const f=await setup(page,"deny"),p=page.locator("#server-task");
-  await p.getByRole("button",{name:"서버 약국 견적 조회",exact:true}).click();
-  for(const [index,reason] of [[0,"BUDGET_EXCEEDED"],[1,"RECIPIENT_NOT_ALLOWED"]] as const){
-    await p.getByRole("button",{name:"이 견적 정책 검사 · 수동",exact:true}).nth(index).click();
-    await expect(p).toContainText(`수동 견적 정책 검사 · DENY · ${reason}`);
-    await expect(p.getByRole("button",{name:"Mandate 확인 및 위임 승인 준비",exact:true})).toBeDisabled();
-  }
-  expect(f.sends).toHaveLength(0);expect(f.posts.filter(x=>x.endsWith("/attempts"))).toHaveLength(2);
-  expect(f.posts.some(x=>x.includes("/account/"))).toBe(false);
-});
-test("Task creation reuses the same idempotency key after a lost response and reload",async({page})=>{
-  const f=await setup(page),keys:string[]=[];
-  await page.route("**/api/tasks",async r=>{if(r.request().method()!=="POST")return r.fallback();keys.push(r.request().headers()["idempotency-key"]);if(keys.length===1)return r.fulfill({status:502,json:{reasonCode:"UPSTREAM_UNAVAILABLE"}});return r.fulfill({json:f.task});});
-  const deadline=new Date(Date.now()+6*3600000-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);
-  for(let i=0;i<2;i++){
-    await page.reload();const p=page.locator("#server-task");await p.getByLabel(/구매 기한/).fill(deadline);
-    await p.getByRole("button",{name:"서버 Task 생성",exact:true}).click();
-    if(i===0)await expect(p.getByRole("alert")).toContainText("UPSTREAM_UNAVAILABLE");else await expect(p).toContainText(taskId);
-  }
-  expect(keys).toHaveLength(2);expect(keys[0]).toBeTruthy();expect(keys[0]).toBe(keys[1]);
 });

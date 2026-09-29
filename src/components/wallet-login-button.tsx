@@ -11,9 +11,8 @@ export function WalletLoginButton({ className }: { className?: string }) {
   const { auth, connection } = useWallet();
   const [open, setOpen] = useState(false);
   const authenticated = !!auth.session && !!connection && auth.session.identity.address.toLowerCase() === connection.address.toLowerCase();
-  return <><button type="button" className={className ?? "button primary"} onClick={() => {
-    if (authenticated) router.push("/dashboard");
-    else if (connection) router.push("/login");
+  return <><button type="button" aria-label={auth.session ? "지갑 계정" : connection ? "로그인 계속하기" : "지갑 연결"} className={className ?? "button primary"} onClick={() => {
+    if (auth.session || connection) router.push("/login");
     else setOpen(true);
   }}>{authenticated ? `${connection.address.slice(0, 6)}…${connection.address.slice(-4)}` : connection ? "로그인 계속하기" : "지갑 연결"}</button><WalletConnectDialog open={open} onClose={() => setOpen(false)} /></>;
 }

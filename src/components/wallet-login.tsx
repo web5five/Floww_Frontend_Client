@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDisconnect } from "wagmi";
 import { useWallet } from "./wallet-provider";
@@ -13,9 +13,10 @@ export function WalletLogin() {
   const router = useRouter();
   const { disconnect: disconnectToolkit } = useDisconnect();
   const { auth, login, connection, busy, notice, disconnect } = useWallet();
+  const redirectAfterLogin = useRef(false);
   const [open, setOpen] = useState(false);
   const [copyNotice, setCopyNotice] = useState("");
-  useEffect(() => { if (auth.phase === "authenticated" && auth.session && connection) router.push("/dashboard"); }, [auth.phase, auth.session, connection, router]);
+  useEffect(() => { if (redirectAfterLogin.current && auth.phase === "authenticated" && auth.session && connection) { redirectAfterLogin.current = false; router.push("/dashboard"); } }, [auth.phase, auth.session, connection, router]);
   const unsupportedChain = !!connection && auth.supportedChainIds.length > 0 && !auth.supportedChainIds.includes(BigInt(connection.chainId).toString());
   const network = connection ? BigInt(connection.chainId) === BigInt(11155111) ? "Sepolia" : `Chain ${BigInt(connection.chainId).toString()}` : "";
   return <main id="main" className={`page-shell ${styles.shell}`}>
@@ -28,7 +29,7 @@ export function WalletLogin() {
           <p>{auth.session ? "서버가 지갑 서명을 검증했습니다. 작업 화면으로 이동할 수 있습니다." : "지갑에서 Floww 로그인 메시지를 확인하고 서명해 주세요. 이 서명은 구매나 지출을 승인하지 않습니다."}</p>
           {unsupportedChain && <p role="alert" className={styles.alert}>지원하는 로그인 네트워크로 변경한 뒤 지갑을 다시 연결해 주세요.</p>}
           {!auth.enabled && <p className={styles.hint}>{authConnectionNotice}</p>}
-          {!auth.session && <button className="button primary" type="button" disabled={!auth.enabled || auth.busy || busy || unsupportedChain} onClick={() => void login()} aria-describedby="wallet-auth-help">{auth.busy ? "로그인 확인 중" : "로그인 메시지 서명"}</button>}
+          {!auth.session && <button className="button primary" type="button" disabled={!auth.enabled || auth.busy || busy || unsupportedChain} onClick={() => { redirectAfterLogin.current = true; void login(); }} aria-describedby="wallet-auth-help">{auth.busy ? "로그인 확인 중" : "로그인 메시지 서명"}</button>}
           <p id="wallet-auth-help" className={styles.hint}>{auth.enabled ? "서버가 발급한 로그인 메시지만 서명합니다. 서버 검증에 성공해야 로그인됩니다." : "현재 서버 로그인을 사용할 수 없습니다. 연결 상태는 유지됩니다."}</p>
           {auth.busy && <p role="status" className={styles.notice}>{auth.phase === "checking_server" ? "로그인 서버 연결 확인 중입니다." : auth.phase === "awaiting_signature" ? "지갑에서 로그인 메시지를 확인해 주세요." : "서버 로그인 상태를 확인 중입니다."}</p>}
           {auth.error && <p role="alert" className={styles.alert}>{auth.error}</p>}

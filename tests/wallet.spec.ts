@@ -49,8 +49,8 @@ test("wallet discovery, rejection, connection, change and disconnect never authe
   expect(calls).toEqual(["eth_requestAccounts", "eth_requestAccounts", "eth_chainId", "eth_accounts"]);
   await page.screenshot({ path: `artifacts/wallet-${info.project.name}.png`, fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
-  await page.getByRole("link", { name: "지갑 연결됨", exact: true }).click();
+  await page.getByRole("link", { name: "내 작업", exact: true }).click();
+  await page.getByRole("button", { name: "로그인 계속하기", exact: true }).click();
   await expect(page.getByText("Fixture Wallet 연결됨", { exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as { walletFixture: { emit: (name: string, value: unknown) => void } }).walletFixture.emit("accountsChanged", []));
   await expect(page.getByText("지갑 계정 또는 네트워크가 변경되었습니다.", { exact: false })).toBeVisible();

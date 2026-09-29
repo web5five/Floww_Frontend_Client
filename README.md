@@ -53,7 +53,9 @@ It is designed to keep the user informed and in control at every step:
 
 ## 🚧 Current State
 
-The Next.js client includes pharmacy previews, wallet authentication and the PR #41 Task Account execution flow: reviewed deployment, EIP-712 approval, exact token allowance/funding, order/payment, receipt reconciliation and simulated fulfillment verification. These actions require the configured owner JWT and an enabled backend. Fixture tests are not hosted E2E acceptance. See the [current integration handoff](docs/task-execution-handoff.md) for implementation, verification and remaining deployment/wallet checks.
+The Next.js client connects wallet login, three purchase scenarios, same-Task chat and voice conversation. A scenario uses the server's stored Task, quotes and policy result; payment still requires the existing Task Account approval, exact token allowance/funding, order, receipt reconciliation and fulfillment verification. The chat microphone and `/voice` share the same voice component. Voice can request a scenario for on-screen confirmation; it cannot sign or pay.
+
+These actions require the configured owner JWT and enabled backend. OpenAI voice additionally needs a server-only key. See the [integrated client handoff](docs/F033_INTEGRATED_CLIENT_HANDOFF.md), [voice contract](docs/F033D_VOICE_CONTRACT.md) and [Task Account handoff](docs/task-execution-handoff.md). Automated fixtures and a live OpenAI transport probe do not establish hosted wallet-to-purchase E2E acceptance.
 
 ---
 

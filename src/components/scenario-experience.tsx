@@ -19,6 +19,7 @@ const defaultGoal = "이미 처방받은 의약품 1팩 구매";
 const initialDraft: Draft = { goal: defaultGoal, budget: "60", deadline: "" };
 const taskKey = (owner: string, scenario: ScenarioId) => `floww-scenario-intent:${owner.toLowerCase()}:${scenario}`;
 const decisionKey = (owner: string, id: string) => `floww-scenario-decision:${owner.toLowerCase()}:${id}`;
+const activeScenarioKey = (owner: string) => `floww-active-scenario:${owner.toLowerCase()}`;
 const stopKey = (id: string) => `floww-task-stop:${id}`;
 
 function readIntent(owner: string, scenario: ScenarioId): Intent | null {
@@ -149,7 +150,7 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
         catch { unresolved = true; }
         setPhase(unresolved ? "unknown" : "error"); setError(cause instanceof Error ? cause.message : "요청 결과를 확인하지 못했습니다.");
       }
-    } finally { if (current(scope) && !stopRef.current) { busyRef.current = false; setBusy(false); } }
+    } finally { if (current(scope)) { busyRef.current = false; setBusy(false); } }
   }, [current, draft, readTask]);
   useEffect(() => {
     const signature = `${owner}|${initialTaskId ?? ""}|${initialScenario ?? ""}`;
@@ -160,7 +161,8 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
     busyRef.current = false; stopRef.current = false;
     const storedScenario = initialTaskId && owner ? scenarioIds.find(id => { try { return readIntent(owner, id)?.taskId === initialTaskId; } catch { return false; } }) : null;
     const pendingScenario = !initialTaskId && owner ? sessionStorage.getItem("floww-pending-scenario") : null;
-    const selected = storedScenario ?? (isScenarioId(initialScenario) ? initialScenario : isScenarioId(pendingScenario) ? pendingScenario : null);
+    const lastScenario = !initialTaskId && owner ? sessionStorage.getItem(activeScenarioKey(owner)) : null;
+    const selected = storedScenario ?? (isScenarioId(initialScenario) ? initialScenario : isScenarioId(pendingScenario) ? pendingScenario : isScenarioId(lastScenario) ? lastScenario : null);
     scenarioRef.current = selected;
     taskIdRef.current = initialTaskId ?? null;
     const scope: Scope = { generation: generationRef.current, owner, scenario: selected };
@@ -168,11 +170,11 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
       if (generationRef.current !== scope.generation) return;
       setGeneration(scope.generation); setScenario(selected); setTask(null); setQuotes([]); setEvents([]); setError(""); setNotice(""); setStopped(false); setBusy(false); setPhase("idle");
       if (!owner) return;
-      if (selected) sessionStorage.removeItem("floww-pending-scenario");
+      if (selected) { sessionStorage.removeItem("floww-pending-scenario"); sessionStorage.setItem(activeScenarioKey(owner), selected); }
       if (initialTaskId && !selected) {
         void readTask(scope, initialTaskId).then(value => { if (value && current(scope, initialTaskId)) setPhase(observedPhase(scope.owner, value)); }).catch(cause => { if (current(scope, initialTaskId)) setError(cause instanceof Error ? cause.message : "작업을 확인하지 못했습니다."); });
       } else if (selected) {
-        try { if (initialTaskId || pendingScenario || readIntent(owner, selected)?.taskId) void journey(scope, initialTaskId); }
+        try { if (initialTaskId || pendingScenario || readIntent(owner, selected)?.requested) void journey(scope, initialTaskId); }
         catch (cause) { if (current(scope)) { setPhase("unknown"); setError(cause instanceof Error ? cause.message : "저장된 작업을 확인하지 못했습니다."); } }
       }
     });
@@ -192,6 +194,7 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
   function choose(id: ScenarioId) {
     if (busyRef.current) return;
     if (!owner) { scenarioRef.current = id; setScenario(id); sessionStorage.setItem("floww-pending-scenario", id); return; }
+    sessionStorage.setItem(activeScenarioKey(owner), id);
     generationRef.current++; setGeneration(generationRef.current); stopRef.current = false; busyRef.current = false;
     scenarioRef.current = id; taskIdRef.current = null;
     setScenario(id); setTask(null); setQuotes([]); setEvents([]); setStopped(false); setError(""); setNotice("");

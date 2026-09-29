@@ -52,6 +52,14 @@ test("one click completes the server check, chat resumes the same task, and two 
     await expect(page).toHaveURL(new RegExp(`/chat/${taskId}`));
     await expect(page.locator(".chat-messages .user")).toContainText("처방");
     await expect(page.locator(".chat-messages .floww").last()).toContainText(reason);
+    await page.getByRole("button", { name: "음성 대화 열기" }).click();
+    await expect(page.getByRole("region", {name:"Floww 음성 대화"})).toBeVisible();
+    await expect(page.getByRole("button", {name:"음성 대화 시작",exact:true})).toBeDisabled();
+    await page.getByRole("button", { name: "음성 대화 닫기" }).click();
+    await expect(page.getByRole("link", {name:/음성 화면 크게/})).toHaveAttribute("href", `/voice?taskId=${taskId}`);
+    await page.getByRole("link", {name:/시나리오 화면으로 돌아가기/}).click();
+    await expect(page).toHaveURL(new RegExp(`taskId=${taskId}`));
+    await expect(page.locator("#scenario-progress")).toContainText(reason);
     await page.reload();
     await expect(page.locator("#scenario-progress")).toContainText(reason);
     await page.goto("/pharmacy");
@@ -94,10 +102,12 @@ test("STOP locks subsequent workflow requests and persists across reload", async
   await page.getByRole("button", { name: /^03 수취인 조건/ }).click();
   await expect(page.locator("#scenario-progress")).toContainText("허용되지 않은 수취인");
   await page.getByRole("button", { name: "작업 중단" }).click();
-  await expect(page.locator("#scenario-progress")).toContainText("후속 실행을 잠갔습니다");
+  await expect(page.getByRole("alert").filter({ hasText: "후속 실행이 잠겼습니다" })).toBeVisible();
+  await expect.poll(() => [...data.items.values()][0].status).toBe("DECLINED");
   const before = data.posts.length;
   await page.reload();
   await expect(page.getByRole("alert").filter({ hasText: "후속 실행이 잠겼습니다" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^01 허용된 구매/ })).toBeEnabled();
   expect(data.posts).toHaveLength(before);
   await expect(page.locator("#scenario-progress").getByRole("region", { name: "실제 Sepolia 구매 실행" })).toHaveCount(0);
 });

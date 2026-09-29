@@ -47,7 +47,7 @@ export function WalletConnectDialog({ open, onClose }: { open: boolean; onClose(
       setSdkBusy(true);
       try { await connectAsync({ connector: sdkConnector }); }
       catch (cause) { if (request === intent.current) setError(walletError(cause)); }
-      finally { if (request === intent.current) setSdkBusy(false); }
+      finally { setSdkBusy(false); }
       return;
     }
     if (!wallet) { setError("이 브라우저에서 해당 지갑을 찾지 못했습니다. 지갑을 설치하거나 지갑 앱의 브라우저에서 열어 주세요."); return; }
