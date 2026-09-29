@@ -21,13 +21,15 @@ function WalletConnectorBridge() {
       return;
     }
     const key = `${connector.uid}:${address.toLowerCase()}:${chainId}`;
-    if (key === last.current || bridge.current.connection?.address.toLowerCase() === address.toLowerCase() && BigInt(bridge.current.connection.chainId) === BigInt(chainId)) {
+    if (key === last.current || (!last.current && bridge.current.connection?.address.toLowerCase() === address.toLowerCase() && BigInt(bridge.current.connection.chainId) === BigInt(chainId))) {
       last.current = key;
       return;
     }
     let active = true;
-    void connector.getProvider().then(provider => {
+    void connector.getProvider().then(async provider => {
       if (!active || !isProvider(provider)) return;
+      if (last.current && last.current !== key) await bridge.current.auth.logout();
+      if (!active) return;
       last.current = key;
       void bridge.current.connect({ id: connector.uid, name: connector.name, provider }, true);
     }).catch(() => { /* The existing wallet UI reports connection failures. */ });

@@ -1,5 +1,5 @@
 import type { WalletAuthAdapter } from "./types";
-export const authConnectionNotice = "백엔드 연결 설정 필요 · 지갑 로그인 비활성";
+export const authConnectionNotice = "현재 로그인에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
 async function call<T>(action: string, method: "GET" | "POST", input?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/wallet-auth/${action}`, { method, credentials: "same-origin", cache: "no-store", signal, headers: input ? { "Content-Type": "application/json" } : {}, body: input ? JSON.stringify(input) : undefined });
   if (!response.ok) {
