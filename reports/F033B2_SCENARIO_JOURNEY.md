@@ -5,9 +5,9 @@
 ## Identity and source / 식별·출처
 
 - Task `task_d04d71fb51bc`, F033B2; human owner Geondong Kim; dispatched implementing agent; 2026-09-30 07:24 KST.
-- Client repository `web5five/Floww_Frontend_Client`; branch `feature/scenario-chat-experience`; base and freshly fetched `origin/main` `b464fac8cd51dc2241a369b65292d711b706c93d`; source/test commit `411e449e8c975b579d3fe8157fe05252b500d34d`, navigation assertion correction `57350a1d5188a13c94b52f2b0e290afe60372947`. No PR, push, merge or deployment.
+- Client repository `web5five/Floww_Frontend_Client`; branch `feature/scenario-chat-experience`; base and freshly fetched `origin/main` `b464fac8cd51dc2241a369b65292d711b706c93d`; source/test commit `411e449e8c975b579d3fe8157fe05252b500d34d`, navigation assertion correction `57350a1d5188a13c94b52f2b0e290afe60372947`, guarded execution-progress fix `7758a4869421f1b0467619f38a4d892c83c0a1cb`. No PR, push, merge or deployment.
 - Local authority: `/Users/geondongkim/Floww/control/F033_FRONTEND_MULTISESSION.md`; dated architecture extract `F033_ARCHITECTURE_SOURCE.md` from Confluence `11960323` v5. Selected purchase: server quote and deterministic policy first, then exact purchase approval through the existing TaskExecution; wallet login grants no spending authority.
-- SHA-256: `src/components/scenario-experience.tsx` `30db2df38335ed9a3986072983a2a50bca22f622930a318bbd824582f5c05855`; `src/lib/scenario-presentation.ts` `2ca57a6eba187c06cd5bc78c2df600c22f3b666e1adb0c7fecbaa7eea326ed7a`.
+- SHA-256: `src/components/scenario-experience.tsx` `2c165346a2b8b6d8d5ddceac95abfdb9c9e165eff94be48bee28a555ed62363a`; `src/lib/scenario-presentation.ts` `2ca57a6eba187c06cd5bc78c2df600c22f3b666e1adb0c7fecbaa7eea326ed7a`.
 
 ## Implemented / 구현
 
