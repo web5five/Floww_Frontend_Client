@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowUpRight, Inbox, LoaderCircle, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 export function GetStarted({ children = "구매 데모 시작" }: { children?: ReactNode }) {
-  return <Link href="/dashboard" className="button primary">{children}<ArrowUpRight size={20} /></Link>;
+  return <Link href="/pharmacy" className="button primary">{children}<ArrowUpRight size={20} /></Link>;
 }
 export function Card({ children, className = "", id }: { children: ReactNode; className?: string; id?: string }) {
   return <section id={id} className={`card ${className}`}>{children}</section>;

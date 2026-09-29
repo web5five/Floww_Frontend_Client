@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { taskProxy } from '../src/lib/api/task-proxy.ts';
+import { sealSession } from '../src/lib/auth/team-session.ts';
+const calls = []; let redirect = false;
+const server = createServer(async (req, res) => {
+  let body = ''; for await (const chunk of req) body += chunk;
+  calls.push({ url: req.url, auth: req.headers.authorization, key: req.headers['idempotency-key'], body });
+  if (redirect) { res.writeHead(302, { Location: 'https://example.invalid/protected' }); return res.end(); }
+  res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ tokenAddress: '0x' + '1'.repeat(40), reflected: 'fixture-task-jwt', accessToken: 'fixture-task-jwt', amountBaseUnits: '60000000' }));
+});
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+const id = '11111111-1111-4111-8111-111111111111';
+process.env.FLOWW_API_BASE_URL = `http://127.0.0.1:${server.address().port}`;
+process.env.FLOWW_SESSION_SECRET = '3'.repeat(64); // In-process fixture, not a credential.
+const cookie = sealSession({ identity: { namespace: 'eip155', address: '0x'+'1'.repeat(40) }, chainId: '11155111', userId: id, accessToken: 'fixture-task-jwt', expiresAt: new Date(Date.now()+60000).toISOString() });
+const request = (path = '', method = 'GET', body, extra = {}) => taskProxy(new Request('http://localhost:3001/api/tasks' + (path ? '/'+path : ''), { method, headers: { Origin: 'http://localhost:3001', Cookie: `floww_wallet_session=${cookie}`, 'Content-Type':'application/json', ...extra }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), path.split('?')[0].split('/').filter(Boolean));
+try {
+  delete process.env.FLOWW_WALLET_AUTH_ENABLED;
+  assert.equal((await request()).status,503);
+  process.env.FLOWW_WALLET_AUTH_ENABLED='true'; process.env.FLOWW_WALLET_AUTH_MODE='team-jwt'; process.env.FLOWW_BUSINESS_JWT_ENABLED='true';
+  assert.equal((await request('', 'GET', undefined, { Cookie: '' })).status,401);
+  assert.equal((await request(id+'/mandate/confirm','POST',{})).status,404);
+  assert.equal((await request(id+'/orders','POST',{})).status,404);
+  assert.equal((await request(id+'/ai-proposal','POST',undefined,{Origin:'https://evil.example'})).status,403);
+  assert.equal((await request(id+'/ai-proposal','POST',{})).status,400);
+  const input={goal:'fixture',itemId:'acetaminophen-500mg-10',maxAmountBaseUnits:'60000000',expiresAt:new Date(Date.now()+86400000).toISOString()};
+  assert.equal((await request('','POST',{...input,maxAmountBaseUnits:60000000},{'Idempotency-Key':'fixture-task-key'})).status,400);
+  assert.equal((await request('','POST',input)).status,400);
+  assert.equal(calls.length,0);
+  const response=await request('','POST',input,{'Idempotency-Key':'fixture-task-key'}); const value=await response.json();
+  assert.equal(value.accessToken,undefined); assert.equal(value.reflected,'[REDACTED]'); assert.equal(value.tokenAddress,'0x'+'1'.repeat(40));
+  assert.equal(calls[0].auth,'Bearer fixture-task-jwt'); assert.equal(calls[0].key,'fixture-task-key'); assert.equal(JSON.parse(calls[0].body).maxAmountBaseUnits,'60000000');
+  assert.equal((await request(id+'/events?after=0&limit=50')).status,200);
+  assert.equal((await request(id+'/ai-proposal','POST')).status,200); assert.equal(calls.at(-1).body,'');
+  redirect=true; assert.equal((await request()).status,502);
+  console.log('task proxy JWT, allowlist, exact amounts, idempotency, redaction and protected-preview checks passed');
+} finally { await new Promise(resolve=>server.close(resolve)); }

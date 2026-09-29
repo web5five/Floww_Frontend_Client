@@ -130,12 +130,12 @@ Open http://127.0.0.1:3001. No backend configuration is required for local demos
 
 | Route | Behavior |
 | --- | --- |
-| / | Landing |
+| / | Pharmacy-first landing |
 | /dashboard | Purchase conditions, local approval/rejection/STOP and activity; optional backend test workspace |
-| /pharmacy | Three synthetic quotes, exact base-unit arithmetic, review and local STOP |
+| /pharmacy | Local pharmacy rehearsal, evidence checklist and authenticated server Task workspace |
 | /login | Browser EVM wallet discovery and separate server authentication |
 
-Pharmacy subtotals are 43/47/63 fUSDC against a 60 fUSDC limit. Fees, prescription/identity conditions and recipients remain unverified. A subtotal under budget is not policy ALLOW. Candidate changes clear review confirmation. Actual authorization is disabled. The older Nike demo remains available independently.
+Local pharmacy subtotals are 23.5/64/19 fUSDC against a 60 fUSDC Task limit; B demonstrates budget denial and C an unauthorized recipient. Fees, prescription/identity conditions and recipients remain unverified. A subtotal under budget is not policy ALLOW. Candidate changes clear review confirmation. Actual authorization is disabled. The older Nike demo remains available independently.
 
 ## Checks
 
@@ -176,7 +176,7 @@ The Next allowlist proxy supports health/readiness, AI drafts, test execution cr
 
 Wallet login uses /api/v1/auth/wallet/nonce and /api/v1/auth/wallet/verify. A read-only health probe precedes signing. Server failures never trigger automatic repeated signatures. Session lookup reads the encrypted BFF cookie; logout clears this browser session only. Backend JWT revocation/refresh is unavailable in this adapter. Login is not mandate approval.
 
-Team-wallet business requests are gated until JWT support is explicitly enabled and never fall back to a shared development token. confirmed:true is only a legacy test-execution field, not spending authorization. REVIEWED is not payment success. Proposed /api/v1/tasks/** descriptors are not executed.
+Team-wallet business requests are gated until JWT support is explicitly enabled and never fall back to a shared development token. confirmed:true is only a legacy test-execution field, not spending authorization. REVIEWED is not payment success. Legacy proposed descriptors remain inert. The separate /api/tasks BFF now connects the implemented Task create/list/read, quotes, AI proposal, events, reject and cancel routes using the current server contract. Spending approval/order routes remain unavailable pending chain alignment.
 
 ## Limits
 
@@ -190,3 +190,8 @@ Team-wallet business requests are gated until JWT support is explicitly enabled 
 ## Work record
 
 The application was developed locally with Codex assistance before this import. Existing shared instructions/templates are preserved. Internal PDFs, private discussions and local Java/PostgreSQL experiments are excluded. See [worklog](docs/worklogs/client-2-import.md) for this branch's verification. No human review, deployment or end-to-end purchase is implied.
+
+
+## Latest Task integration handoff
+
+See [client Task handoff](docs/client-task-handoff.md) for the exact server commit, implemented routes, hosting access observation, frontend/backend ownership and remaining live acceptance gates.
