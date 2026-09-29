@@ -2,21 +2,23 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useDisconnect } from "wagmi";
 import { useWallet } from "./wallet-provider";
 import { authConnectionNotice } from "@/lib/auth/adapter";
 import { WalletConnectDialog } from "./wallet-connect-dialog";
 import styles from "./wallet-login.module.css";
+import { loginReturnTo } from "@/lib/auth/return-to";
 
 export function WalletLogin() {
   const router = useRouter();
+  const returnTo = loginReturnTo(useSearchParams().get("returnTo"));
   const { disconnect: disconnectToolkit } = useDisconnect();
   const { auth, login, connection, busy, notice, disconnect } = useWallet();
   const redirectAfterLogin = useRef(false);
   const [open, setOpen] = useState(false);
   const [copyNotice, setCopyNotice] = useState("");
-  useEffect(() => { if (redirectAfterLogin.current && auth.phase === "authenticated" && auth.session && connection) { redirectAfterLogin.current = false; router.push("/dashboard"); } }, [auth.phase, auth.session, connection, router]);
+  useEffect(() => { if (redirectAfterLogin.current && auth.phase === "authenticated" && auth.session && connection) { redirectAfterLogin.current = false; router.replace(returnTo); } }, [auth.phase, auth.session, connection, router, returnTo]);
   const unsupportedChain = !!connection && auth.supportedChainIds.length > 0 && !auth.supportedChainIds.includes(BigInt(connection.chainId).toString());
   const network = connection ? BigInt(connection.chainId) === BigInt(11155111) ? "Sepolia" : `Chain ${BigInt(connection.chainId).toString()}` : "";
   return <main id="main" className={`page-shell ${styles.shell}`}>
@@ -33,7 +35,7 @@ export function WalletLogin() {
           <p id="wallet-auth-help" className={styles.hint}>{auth.enabled ? "서버가 발급한 로그인 메시지만 서명합니다. 서버 검증에 성공해야 로그인됩니다." : "현재 서버 로그인을 사용할 수 없습니다. 연결 상태는 유지됩니다."}</p>
           {auth.busy && <p role="status" className={styles.notice}>{auth.phase === "checking_server" ? "로그인 서버 연결 확인 중입니다." : auth.phase === "awaiting_signature" ? "지갑에서 로그인 메시지를 확인해 주세요." : "서버 로그인 상태를 확인 중입니다."}</p>}
           {auth.error && <p role="alert" className={styles.alert}>{auth.error}</p>}
-          {auth.session && <Link href="/dashboard" className="button primary">작업 화면으로 이동</Link>}
+          {auth.session && <Link href={returnTo} className="button primary">작업 화면으로 이동</Link>}
           <div className={styles.actions}><button type="button" className={styles.textButton} onClick={() => void navigator.clipboard.writeText(connection.address).then(() => setCopyNotice("지갑 주소를 복사했습니다.")).catch(() => setCopyNotice("주소를 복사할 수 없습니다."))}>주소 복사</button><button type="button" className={styles.textButton} onClick={() => { disconnect(); disconnectToolkit(); }}>지갑 연결 해제</button>{auth.session && <button type="button" className={styles.textButton} onClick={() => void auth.logout()}>로그아웃</button>}</div>
           {copyNotice && <p role="status">{copyNotice}</p>}
         </div>}

@@ -1,0 +1,34 @@
+.visual { position:relative; padding:30px; border:1px solid #e4e5f0; background:linear-gradient(145deg,#fff 50%,#f0f2ff); border-radius:30px; box-shadow:0 24px 80px #253e9417; transform:rotate(-2deg); }
+.visualTop,.brand,.badge,.flow,.control,.intent { display:flex; align-items:center; }
+.visualTop { justify-content:space-between; gap:12px; margin-bottom:32px; }
+.brand { gap:10px; font-size:25px; font-weight:750; color:#4261ff; }
+.badge { gap:5px; font-size:10px; color:#69718a; }
+.intent { gap:13px; padding:22px; border-radius:18px; background:#fff; border:1px solid #e7e9f4; }
+.intent svg { flex:none; color:#4261ff; }
+.intent span { display:block; font-size:12px; color:#737b8b; margin-bottom:6px; }
+.intent strong { font-size:17px; line-height:1.5; }
+.bounds { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:18px 0; }
+.bounds span { border:1px solid #e6e9f5; border-radius:12px; padding:12px 14px; font-size:13px; background:#fafbff; color:#485270; }
+.flow { justify-content:space-between; gap:9px; padding:18px 4px 25px; font-size:13px; font-weight:600; }
+.flow svg { color:#7786df; flex:none; }
+.control { gap:15px; background:#4261ff; color:white; border-radius:16px; padding:20px; }
+.control svg { flex:none; }
+.control p { margin:0; }
+.control strong,.control span { display:block; }
+.control strong { font-size:15px; margin-bottom:5px; }
+.control span { font-size:12px; color:#e4e9ff; line-height:1.6; }
+.how { scroll-margin-top:100px; padding:56px 0; }
+.sectionDescription { font-size:16px; color:#717782; margin-top:16px; }
+.steps { list-style:none; margin:36px 0 0; padding:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:24px; }
+.steps li { border-top:1px solid #d8dce8; padding:25px 0 10px; }
+.stepNumber { color:#4261ff; font-size:13px; font-weight:700; }
+.steps h3 { font-size:19px; margin:16px 0 12px; letter-spacing:-.6px; }
+.steps p { color:#686f7e; font-size:14px; line-height:1.8; margin:0; }
+.boundary { display:grid; grid-template-columns:1.3fr 1fr; align-items:center; gap:50px; background:#f0f2ff; border-radius:28px; padding:45px; margin:45px 0 65px; }
+.boundary h2 { font-size:32px; letter-spacing:-1.3px; line-height:1.4; margin:16px 0; }
+.boundary p { max-width:530px; color:#657089; font-size:15px; line-height:1.8; }
+.boundary ul { display:grid; gap:15px; list-style:none; padding:0; margin:0; }
+.boundary li { display:flex; align-items:center; gap:12px; background:white; padding:18px; border-radius:14px; font-weight:600; font-size:15px; }
+.boundary li svg { color:#4261ff; flex:none; }
+@media(max-width:900px) { .visual { transform:none; } .steps { grid-template-columns:repeat(2,minmax(0,1fr)); } .boundary { grid-template-columns:1fr; gap:20px; } }
+@media(max-width:520px) { .visual { padding:20px; border-radius:22px; margin-top:12px; } .badge { max-width:108px; line-height:1.5; } .visualTop { margin-bottom:20px; } .intent { padding:17px 13px; } .intent strong { font-size:15px; } .control { padding:17px 14px; } .flow { font-size:12px; } .how { padding:30px 0; } .steps { gap:20px; } .steps h3 { font-size:16px; } .steps p { font-size:13px; } .boundary { padding:25px 20px; margin:25px 0 35px; } .boundary h2 { font-size:27px; } .boundary li { font-size:14px; } }

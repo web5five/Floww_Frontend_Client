@@ -13,6 +13,7 @@ export function useWalletAuth() {
   const [mode, setMode] = useState("local-session");
   const [businessReady, setBusinessReady] = useState(true);
   const [session, setSession] = useState<WalletSession | null>(null);
+  const [initialized, setInitialized] = useState(false);
   const [phase, setPhase] = useState("idle");
   const [error, setError] = useState("");
   const serial = useRef(0);
@@ -30,8 +31,12 @@ export function useWalletAuth() {
         enabledRef.current = result.enabled === true; setEnabled(enabledRef.current);
         setMode(result.mode ?? "local-session"); setBusinessReady(result.businessReady !== false);
         setSupportedChainIds(Array.isArray(result.chainIds) ? result.chainIds.filter((id: unknown) => typeof id === "string" && /^[1-9][0-9]{0,15}$/.test(id)) : []);
-        if (enabledRef.current) { const s = await api.getSession(); if (active && lifecycle.current === version) setSession(s); }
+        if (enabledRef.current) {
+          const s = await api.getSession();
+          if (active && lifecycle.current === version) setSession(s && Date.parse(s.expiresAt) > Date.now() ? s : null);
+        }
       } catch { if (active) setError("서버 로그인 상태를 확인하지 못했습니다."); }
+      finally { if (active) setInitialized(true); }
     };
     void init();
     return () => { active = false; lifecycle.current++; };
@@ -101,5 +106,5 @@ export function useWalletAuth() {
       }
     } finally { pending.current = false; }
   }
-  return { enabled, mode, businessReady, supportedChainIds, session, phase, error, login, logout, busy: !["idle", "authenticated"].includes(phase) };
+  return { enabled, initialized, mode, businessReady, supportedChainIds, session, phase, error, login, logout, busy: !["idle", "authenticated"].includes(phase) };
 }
