@@ -11,7 +11,7 @@ interface WalletContextValue {
   connection: Connection | null;
   busy: boolean;
   notice: string;
-  connect(wallet: WalletOption): Promise<void>;
+  connect(wallet: WalletOption, alreadyConnected?: boolean): Promise<void>;
   disconnect(): void;
   discover(): void;
   requestForOwner(owner: string, method: string, params?: unknown[], allowed?: () => boolean): Promise<unknown>;
@@ -28,6 +28,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const serial = useRef(0);
   const unsubscribe = useRef<() => void>(() => {});
   const discover = () => window.dispatchEvent(new Event("eip6963:requestProvider"));
+  useEffect(() => {
+    if (connection && auth.session &&
+      (auth.session.identity.address.toLowerCase() !== connection.address.toLowerCase() ||
+        auth.session.chainId !== BigInt(connection.chainId).toString())) void auth.logout();
+  }, [connection, auth]);
   useEffect(() => {
     const lifecycle = serial;
     const announce = (event: Event) => {
@@ -50,7 +55,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     pending.current = false; setBusy(false); setConnection(null);
     setNotice("이 앱의 지갑 연결을 해제했습니다. 지갑의 사이트 연결 권한은 지갑 설정에서 관리할 수 있습니다.");
   }
-  async function connect(wallet: WalletOption) {
+  async function connect(wallet: WalletOption, alreadyConnected = false) {
     if (pending.current) return;
     pending.current = true; setBusy(true); setNotice(""); setConnection(null);
     unsubscribe.current();
@@ -75,7 +80,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       wallet.provider.on("chainChanged", changed);
       wallet.provider.on("disconnect", lost);
       unsubscribe.current = () => { wallet.provider.removeListener("accountsChanged", changed); wallet.provider.removeListener("chainChanged", changed); wallet.provider.removeListener("disconnect", lost); };
-      const address = account(await wallet.provider.request({ method: "eth_requestAccounts" }));
+      // RainbowKit has already obtained consent; do not prompt for connection twice.
+      const address = account(await wallet.provider.request({ method: alreadyConnected ? "eth_accounts" : "eth_requestAccounts" }));
       const snapshot = revision;
       const chainId = chain(await wallet.provider.request({ method: "eth_chainId" }));
       const latest = account(await wallet.provider.request({ method: "eth_accounts" }));
@@ -96,7 +102,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   async function requestForOwner(owner: string, method: string, params: unknown[] = [], allowed: () => boolean = () => true) {
     const wallet = selected.current, revision = serial.current;
     const session = auth.session;
-    if (!wallet || !session || session.identity.address.toLowerCase() !== owner.toLowerCase() || !allowed()) throw new Error("지갑 로그인과 연결을 확인하세요.");
+    if (!wallet || !session || !connection || connection.address.toLowerCase() !== owner.toLowerCase() || session.identity.address.toLowerCase() !== owner.toLowerCase() || session.chainId !== "11155111" || !allowed()) throw new Error("지갑 로그인과 연결을 확인하세요.");
     const address = account(await wallet.provider.request({ method: "eth_accounts" }));
     const network = chain(await wallet.provider.request({ method: "eth_chainId" }));
     if (revision !== serial.current || address?.toLowerCase() !== owner.toLowerCase() || !network || BigInt(network) !== BigInt(11155111) || !allowed()) throw new Error("지갑 계정·Sepolia 네트워크 변경 또는 STOP으로 요청을 차단했습니다.");

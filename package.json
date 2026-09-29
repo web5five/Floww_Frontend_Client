@@ -11,12 +11,20 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@rainbow-me/rainbowkit": "2.2.11",
+    "@tanstack/react-query": "5.100.5",
+    "@x402/core": "2.25.0",
+    "@x402/evm": "2.25.0",
+    "@x402/extensions": "2.25.0",
+    "@x402/svm": "2.25.0",
     "ethers": "6.17.0",
     "lucide-react": "^0.468.0",
     "next": "^16.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "viem": "2.53.1",
+    "wagmi": "2.19.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -29,6 +37,8 @@
     "tailwindcss": "^4.0.0",
     "typescript": "^5.0.0"
   },
-  "engines": { "node": ">=24.19.0 <25" },
+  "engines": {
+    "node": ">=24.19.0 <25"
+  },
   "packageManager": "npm@11.17.0"
 }

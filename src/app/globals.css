@@ -46,8 +46,6 @@ button:disabled { opacity:.5; cursor:wait; }
 .preview-card { position:relative; width:350px; transform:rotate(-5deg); box-shadow:0 24px 50px #2448c520; padding:28px; }
 .preview-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; }
 .mini-brand { font-size:25px; font-weight:900; color:var(--blue); letter-spacing:-2px; }
-.mock-badge { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; font-size:14px; letter-spacing:1px; font-weight:700; color:#5e6218; background:#ffffbf; border:1px solid #e5e7a1; padding:7px 9px; border-radius:100px; }
-.mock-badge>span { width:5px; height:5px; border-radius:50%; background:#818731; }
 .label { color:var(--muted); font-size:14px; margin:0 0 9px; }
 .preview-balance { font-size:37px; font-weight:700; letter-spacing:-1.5px; margin-bottom:9px; }
 .preview-balance>span { color:#475569; }
@@ -112,7 +110,6 @@ body { background:linear-gradient(180deg,#fff 0%,#f7f9ff 72%,#fff 100%); }
 .preview-card { box-shadow:0 25px 70px #3654b520; }
 .intro-card { background:linear-gradient(130deg,#4261ff,#3448fa); border-color:transparent; box-shadow:0 16px 40px #4261ff25; }
 .ai-card { background:linear-gradient(135deg,#4261ff,#3448fa); border-color:transparent; }
-.mock-badge { background:#f8ffb4; color:#515812; border-color:#e5ed92; }
 .bottom-cta { margin:38px 0; padding:35px; border:1px solid #e3eaff; border-radius:26px; background:linear-gradient(105deg,#f0f4ff,#fff); }
 .site-footer .wordmark { font-size:25px; }
 .site-footer .logo-symbol { transform:scale(.75); transform-origin:left center; margin-right:-6px; }
@@ -334,3 +331,114 @@ fieldset:disabled { opacity:1; }
   .review-layout .card { padding:24px; }.compact-guide summary { flex-wrap:wrap; }
 }
 @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; }.button { transition:none; } }
+
+/* F033B: one server-backed scenario journey across overview, workspace and chat. */
+.site-header .header-login { margin-left:auto; white-space:nowrap; padding:11px 18px; min-height:42px; }
+.scenario-home { padding:30px 0 70px; }
+.scenario-home .section-heading h2 { font-size:clamp(24px,3vw,38px); max-width:650px; }
+.scenario-intent { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.scenario-intent>div { display:flex; flex-direction:column; gap:8px; padding:18px; border:1px solid #dce4ff; border-radius:18px; background:#f5f7ff; min-width:0; }
+.scenario-intent strong { color:#53617e; font-size:13px; }
+.scenario-intent span { overflow-wrap:anywhere; font-weight:700; line-height:1.5; }
+.scenario-edit { padding:17px 22px; }
+.scenario-edit summary { cursor:pointer; font-weight:700; }
+.scenario-edit-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-top:20px; }
+.scenario-edit-fields input { width:100%; }
+.scenario-edit p { margin:14px 0 0; color:var(--muted); }
+.scenario-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin:24px 0 28px; }
+.scenario-card { display:flex; flex-direction:column; align-items:flex-start; text-align:left; gap:16px; min-width:0; min-height:240px; padding:28px; border:1px solid #dce4ff; border-radius:25px; background:#fff; color:var(--ink); box-shadow:0 12px 35px #203a7a0a; cursor:pointer; text-decoration:none; transition:transform .2s,border-color .2s,box-shadow .2s; }
+.scenario-card:hover,.scenario-card:focus-visible { transform:translateY(-3px); border-color:var(--blue); box-shadow:0 16px 40px #203a7a1a; }
+.scenario-card.selected { border:2px solid var(--blue); background:#f3f6ff; }
+.scenario-number { color:var(--blue); font-size:13px; font-weight:800; letter-spacing:.13em; }
+.scenario-card h2,.scenario-card h3 { margin:0; font-size:clamp(21px,2vw,28px); }
+.scenario-card p { margin:0; line-height:1.6; color:var(--muted); }
+.scenario-card-action { display:flex; align-items:center; gap:9px; margin-top:auto; color:var(--blue); font-weight:700; }
+.scenario-experience { display:grid; gap:22px; }
+.scenario-experience .dashboard-title { margin-bottom:0; }
+.scenario-panel { padding:28px; scroll-margin-top:20px; }
+.scenario-panel h2 { margin-top:0; }
+.scenario-panel fieldset { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; padding:0; border:0; }
+.scenario-panel fieldset .form-note,.scenario-panel fieldset .button { grid-column:1/-1; justify-self:start; }
+.scenario-panel .field { min-width:0; }
+.scenario-panel .field input { width:100%; }
+.scenario-facts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:13px; margin:20px 0; }
+.scenario-facts>div { display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:0; padding:17px; border-radius:18px; background:#f2f5ff; }
+.scenario-facts span { color:var(--muted); font-size:13px; }
+.scenario-facts strong { overflow-wrap:anywhere; line-height:1.45; }
+.scenario-result { padding:16px 18px; border-radius:16px; background:#edf4ff; color:#193875; font-weight:700; }
+.scenario-result.denied { background:#fff2ec; color:#913f24; }
+.scenario-chat-choice { padding:15px 18px; border-radius:17px; background:#fff8df; }
+.scenario-chat-choice p { margin:0; font-weight:700; }
+.scenario-steps { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; padding:0; margin:24px 0; list-style:none; }
+.scenario-steps li { padding:11px 8px; text-align:center; border-radius:12px; background:#f0f2f7; color:#68738a; font-size:13px; font-weight:700; }
+.scenario-steps li.done { background:#e8f6f0; color:#226445; }
+.scenario-steps li.current { background:#e8eeff; color:#2548c8; }
+.scenario-execution { margin:26px 0; padding-top:22px; border-top:1px solid #dce4ff; }
+.scenario-panel details { margin:20px 0 0; }
+.scenario-panel .api-actions { flex-wrap:wrap; margin-top:17px; }
+.chat-messages,.journey-messages { display:grid; gap:14px; list-style:none; margin:20px 0 0; padding:0; }
+.chat-messages li,.journey-messages li { max-width:82%; padding:17px 20px; border-radius:18px 18px 18px 4px; background:#f0f4ff; }
+.chat-messages li.user,.journey-messages li.user { margin-left:auto; border-radius:18px 18px 4px 18px; background:#fff7da; }
+.chat-messages li p,.journey-messages li p { margin:8px 0; line-height:1.6; }
+.chat-messages time,.journey-messages time { color:var(--muted); font-size:12px; }
+@media(max-width:1000px) { .scenario-grid { grid-template-columns:1fr; }.scenario-card { min-height:0; }.scenario-facts,.scenario-intent { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:760px) { .site-header .header-login { margin-left:0; }.scenario-panel { padding:22px; }.scenario-edit-fields,.scenario-intent,.scenario-facts { grid-template-columns:1fr; }.scenario-steps { grid-template-columns:repeat(2,minmax(0,1fr)); }.chat-messages li,.journey-messages li { max-width:100%; } }
+
+.chat-voice-entry{margin:20px 0 28px;padding:20px;border:1px solid var(--line,#dce5ef);border-radius:24px;background:#fff}.chat-voice-entry>p{color:#63788a;font-size:13px;margin:12px 0}.chat-voice-entry .text-link{font-size:13px}
+
+/* F034B: keep the task summary and next action visible across screen sizes. */
+.scenario-grid .scenario-card { margin-bottom:0; }
+.scenario-intent>div,.scenario-facts>div { border-radius:16px; }
+.scenario-card { gap:14px; }
+.scenario-card p { max-width:38ch; }
+.scenario-card-action { padding-top:6px; }
+.scenario-panel .section-heading { margin-bottom:18px; }
+.scenario-panel .section-heading h2 { font-size:20px; }
+.scenario-panel .api-actions .button { white-space:normal; text-align:center; }
+.chat-experience { max-width:1000px; margin-inline:auto; }
+.chat-messages li,.journey-messages li { overflow-wrap:anywhere; }
+.chat-messages li strong,.journey-messages li strong { line-height:1.5; }
+.chat-messages li p,.journey-messages li p { margin-bottom:0; }
+.chat-voice-entry { margin:0; }
+@media(max-width:760px) {
+  .site-header { row-gap:12px; }
+  .site-header nav { gap:clamp(12px,3vw,20px); }
+  .site-header nav a { min-height:44px; display:inline-flex; align-items:center; }
+  .scenario-home { padding-top:20px; padding-bottom:48px; }
+  .scenario-grid { gap:12px; margin:18px 0 22px; }
+  .scenario-card { padding:21px; gap:11px; border-radius:20px; }
+  .scenario-card h2,.scenario-card h3 { font-size:21px; }
+  .scenario-card p { font-size:14px; }
+  .scenario-intent,.scenario-facts { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+  .scenario-intent>div,.scenario-facts>div { padding:13px; gap:6px; }
+  .scenario-intent span,.scenario-facts strong { font-size:14px; }
+  .scenario-panel { padding:20px; }
+  .scenario-panel .section-heading { align-items:flex-start; }
+  .scenario-panel .section-heading h2 { font-size:18px; }
+  .scenario-steps { gap:7px; margin:18px 0; }
+  .scenario-steps li { line-height:1.45; }
+  .chat-messages li,.journey-messages li { max-width:92%; padding:15px 16px; }
+  .chat-messages li.user,.journey-messages li.user { max-width:88%; }
+  .chat-voice-entry { padding:16px; border-radius:20px; }
+}
+@media(max-width:370px) {
+  .site-header nav { gap:8px; }
+  .site-header nav a { font-size:12px; }
+  .site-header .header-login { padding-inline:13px; }
+  .scenario-intent,.scenario-facts { grid-template-columns:1fr; }
+}
+
+/* Route-backed purchase steps keep one active action in view. */
+.journey-shell { max-width:1080px; }
+.journey-step-nav ol { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; list-style:none; padding:0; margin:0; }
+.journey-step-nav li { min-width:0; border-radius:15px; background:#eff2fa; color:#59677d; font-weight:700; }
+.journey-step-nav li.current { background:#e9efff; color:#2548c8; outline:2px solid #4261ff; }
+.journey-step-nav a,.journey-step-nav li>span { display:flex; align-items:center; gap:10px; min-height:60px; padding:12px 15px; }
+.journey-step-nav a>span,.journey-step-nav li>span>span { font-size:12px; opacity:.8; }
+.journey-shell .scenario-panel { margin:0; }
+.journey-shell .scenario-panel>.button { margin-top:16px; }
+@media(max-width:760px) {
+  .journey-step-nav ol { gap:5px; }
+  .journey-step-nav a,.journey-step-nav li>span { flex-direction:column; justify-content:center; gap:3px; padding:8px 3px; min-height:61px; text-align:center; font-size:12px; line-height:1.25; }
+  .journey-shell .scenario-panel>.button { width:100%; white-space:normal; text-align:center; }
+}

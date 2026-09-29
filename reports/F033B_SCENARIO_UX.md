@@ -1,0 +1,31 @@
+# F033B — Scenario and chat experience / 시나리오·작업 대화 인계
+
+Status: **PENDING_SYNC** to Confluence engineering worklog page `12517414` (v4 at read time). This dispatched worker was instructed to report only through Orca orchestration and not post to external channels.
+
+## Scope and sources / 범위와 출처
+
+- Task: `task_44c3e7750f20`; human owner: Geondong Kim; implementing agent: dispatched F033B worker; recorded 2026-09-30 06:57 KST.
+- Client repository `web5five/Floww_Frontend_Client`; branch `feature/scenario-chat-experience`; base `b464fac8cd51dc2241a369b65292d711b706c93d`; implementation commits `6ca4e8b613099b2655c60e5c109141af40437728` and `8c471688953d69c5756ac1e0e9ded3f033b5eab6`. No PR, push, merge or deployment.
+- Primary architecture Confluence `11960323` v5, live summary re-read during this task; older system architecture `11927569` v12 is marked superseded for execution. Engineering workflow `12517414` v4. Local task specification: `/Users/geondongkim/Floww/control/F033_FRONTEND_MULTISESSION.md`; dated source extract: `F033_ARCHITECTURE_SOURCE.md` (2026-09-30). These are requirements/reference, not proof of this frontend run.
+
+## Implemented / 구현
+
+- `src/app/page.tsx`, `src/components/header.tsx`: overview with three scenario entry cards and an upper-right wallet-login link. The link is a compile-safe seam until F033A's `WalletLoginButton({ className?: string })` is integrated; it does not claim a connected or authenticated state from a static fixture.
+- `src/app/pharmacy/page.tsx`, `src/app/dashboard/page.tsx`, `src/app/chat/[taskId]/page.tsx`, `src/components/scenario-experience.tsx`, `src/lib/scenario-presentation.ts`: one Task-backed runner for creation, persisted reload, quote lookup, Kiln proposal for the normal path, user-origin quote policy probes for B/C, server event progress, STOP and the same-task chat route. Actual merchant quote amounts come from the server; scenario identity selects a merchant ID, and ambiguous/missing quotes fail closed. Repeated create uses a stored idempotency key; proposal/attempt requests lock per Task to avoid silent resubmission after an unknown result. Chat never creates a second payment path. `TaskExecution` is composed only for a server ALLOW attempt and retains the F033A-owned wallet/account boundary. The follow-up commit guards owner changes during requests and reads bounded event pages rather than showing only the first page.
+- Primary facts are purpose, cap, deadline, merchant and result. IDs, policy reason, account and transaction evidence are in expandable details. The optional admin audit link accepts only an HTTPS URL template in `NEXT_PUBLIC_FLOWW_ADMIN_AUDIT_URL` containing `{taskId}` (localhost HTTP permitted for development); when unset there is no invented admin destination.
+- `src/app/globals.css`, `src/components/ui.tsx`: responsive scenario/chat presentation and neutral loading copy. Removed obsolete route-only rehearsal components (`dashboard`, `pharmacy-preview`, `demo-evidence`, `purchase-authorization-guide`, `task-workspace`) so the active route no longer presents local approval or simulated success as purchase progress.
+
+## Checks and evidence / 확인 결과
+
+- `npm ci`: pass, 375 packages installed and 0 npm audit vulnerabilities. Initial shell was Node 25.8.1, outside the pinned engine; subsequent checks used `/Users/geondongkim/.npm/_npx/387698761821791d/node_modules/node/bin` (`node v24.21.0`, `npm 11.11.1`). Pinned package requests `npm 11.17.0`, so that exact npm version was not verified.
+- `npm run typecheck`: pass, Next route types and TypeScript. `npm run lint`: pass with zero warnings. `git diff --check`: pass.
+- `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3107 npx playwright test tests/scenario-experience.spec.ts`: **6 passed** across desktop/mobile with the local Next dev server and intercepted API fixtures, on implementation commit `6ca4e8b`. Tests cover overview cards/login visibility, merchant identity selection with noncanonical fixture prices, both DENYs without execution controls or payment posts, Kiln ALLOW presentation, same Task in chat and after reload, STOP and read-only refresh after STOP, plus mobile overflow. Screenshots generated locally at `/tmp/f033b-chat-desktop.png` and `/tmp/f033b-chat-mobile.png`; these are synthetic fixture UI, not live payment evidence. The follow-up owner/event-pagination commit was reviewed with `git diff --check` but could not be rerun under the coordinator's no-node-process disk cleanup instruction; the combined-head gate must cover it.
+- Local build: explicitly deferred by the coordinator to the combined A+B integration gate because of limited disk space. The existing broad UI suite was not run: many older specs still target deleted rehearsal selectors and need an integration-level rewrite; these were preserved rather than silently disabled. No live wallet, hosted backend, Kiln, chain transaction, real-user acceptance or admin cross-app verification was performed.
+
+## Integration seam and next action / 통합 접점
+
+- F033A owns `src/components/wallet-login-button.tsx`, `src/app/layout.tsx` and TaskExecution/API contracts. Replace the temporary header login link with F033A's button after its branch is integrated and rerun client checks. The current A-owned layout still has a visible `Prototype` footer and stale payment-not-connected metadata; this was escalated to the coordinator for F033A, and the primary copy audit cannot pass until that change lands.
+- F033C/controller should supply the actual admin audit URL template and verify that the client and admin read the same permitted Task/attempt/transaction IDs. No admin URL was guessed or published.
+- Controller to independently review the combined F033A/F033B head, update superseded route tests, run the pinned build/full affected checks, and perform real wallet/session/backend/hosted acceptance before push, PR, merge or deploy. Reviewer and team acceptance: **pending**.
+
+The proposal to keep the old local approval simulator in the primary route was rejected because it would conflict with the verified server Task and payment authority. The accepted implementation presents only server facts and makes manual denial-probe origin explicit.

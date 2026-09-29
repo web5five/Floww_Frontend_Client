@@ -2,16 +2,18 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { taskProxy } from '../src/lib/api/task-proxy.ts';
 import { sealSession } from '../src/lib/auth/team-session.ts';
+import { previewBypassHeader } from '../src/lib/api/preview-bypass.ts';
 const calls = []; let redirect = false;
 const server = createServer(async (req, res) => {
   let body = ''; for await (const chunk of req) body += chunk;
-  calls.push({ url: req.url, auth: req.headers.authorization, key: req.headers['idempotency-key'], body });
+  calls.push({ url: req.url, auth: req.headers.authorization, key: req.headers['idempotency-key'], bypass:req.headers['x-vercel-protection-bypass'], body });
   if (redirect) { res.writeHead(302, { Location: 'https://example.invalid/protected' }); return res.end(); }
   res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ tokenAddress: '0x' + '1'.repeat(40), token:'fixture-task-jwt',typedData:{message:{token:'0x'+'2'.repeat(40)},domain:{name:'FlowwTaskAccount'}}, reflected: 'fixture-task-jwt', accessToken: 'fixture-task-jwt', amountBaseUnits: '60000000' }));
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const id = '11111111-1111-4111-8111-111111111111';
 process.env.FLOWW_API_BASE_URL = `http://127.0.0.1:${server.address().port}`;
+process.env.FLOWW_SERVER_VERCEL_BYPASS_SECRET = 'fixture-bypass';
 process.env.FLOWW_SESSION_SECRET = '3'.repeat(64); // In-process fixture, not a credential.
 const cookie = sealSession({ identity: { namespace: 'eip155', address: '0x'+'1'.repeat(40) }, chainId: '11155111', userId: id, accessToken: 'fixture-task-jwt', expiresAt: new Date(Date.now()+60000).toISOString() });
 const request = (path = '', method = 'GET', body, extra = {}) => taskProxy(new Request('http://localhost:3001/api/tasks' + (path ? '/'+path : ''), { method, headers: { Origin: 'http://localhost:3001', Cookie: `floww_wallet_session=${cookie}`, 'Content-Type':'application/json', ...extra }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }), path.split('?')[0].split('/').filter(Boolean));
@@ -30,11 +32,17 @@ try {
   const input={goal:'fixture',itemId:'acetaminophen-500mg-10',maxAmountBaseUnits:'60000000',expiresAt:new Date(Date.now()+86400000).toISOString()};
   assert.equal((await request('','POST',{...input,maxAmountBaseUnits:60000000},{'Idempotency-Key':'fixture-task-key'})).status,400);
   assert.equal((await request('','POST',input)).status,400);
+  assert.equal((await request('','POST',input,{'Idempotency-Key':'fixture-task-key','Content-Type':'application/jsonx'})).status,400);
+  const invalidUtf8 = new Request('http://localhost:3001/api/tasks', { method:'POST', headers: { Origin:'http://localhost:3001', Cookie:`floww_wallet_session=${cookie}`, 'Content-Type':'application/json', 'Idempotency-Key':'fixture-task-key' }, body:new Uint8Array([0x7b,0x22,0x78,0x22,0x3a,0xff,0x7d]) });
+  assert.equal((await taskProxy(invalidUtf8, [])).status,400);
   assert.equal(calls.length,0);
   const response=await request('','POST',input,{'Idempotency-Key':'fixture-task-key'}); const value=await response.json();
   assert.equal(value.accessToken,undefined); assert.equal(value.reflected,'[REDACTED]'); assert.equal(value.tokenAddress,'0x'+'1'.repeat(40));
   assert.equal(value.token,undefined);assert.equal(value.typedData.message.token,'0x'+'2'.repeat(40));
   assert.equal(calls[0].auth,'Bearer fixture-task-jwt'); assert.equal(calls[0].key,'fixture-task-key'); assert.equal(JSON.parse(calls[0].body).maxAmountBaseUnits,'60000000');
+  assert.equal(calls[0].bypass,'fixture-bypass'); assert.equal(response.headers.get('x-vercel-protection-bypass'),null); assert.equal(JSON.stringify(value).includes('fixture-bypass'),false);
+  assert.deepEqual(previewBypassHeader(new URL('https://other.example/api/v1/tasks')),{});
+  assert.deepEqual(previewBypassHeader(new URL('/api/v1/auth/admin/signin',process.env.FLOWW_API_BASE_URL)),{});
   assert.equal((await request(id+'/events?after=0&limit=50')).status,200);
   assert.equal((await request(id+'/account')).status,200);
   assert.equal(calls.at(-1).url,`/api/v1/tasks/${id}/account`);
@@ -50,5 +58,7 @@ try {
   assert.equal((await request(id+'/attempts','POST',{quoteId:'qt-fixture-b',proposedBy:'AI'})).status,400);
   for(const action of ['approve','reconcile','payment','fulfillment','approval-request']) assert.equal((await request(id+'/account/'+action,'POST')).status,200);
   redirect=true; assert.equal((await request()).status,502);
+  delete process.env.FLOWW_SERVER_VERCEL_BYPASS_SECRET;
+  redirect=false; assert.equal((await request()).status,200); assert.equal(calls.at(-1).bypass,undefined);
   console.log('task proxy JWT, allowlist, exact amounts, idempotency, redaction and protected-preview checks passed');
 } finally { await new Promise(resolve=>server.close(resolve)); }

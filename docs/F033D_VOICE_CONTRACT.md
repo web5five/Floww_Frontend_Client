@@ -1,0 +1,20 @@
+# F033D voice conversation contract
+
+## UI integration / 화면 연결
+
+- `VoiceAgent({ taskId?: string, onScenarioRequest?: (intent: "permitted" | "over-budget" | "recipient") => void })` renders the full panel. `VoiceAgentLauncher` renders a compact microphone button that mounts the same panel on click. Opening the panel never starts recording; the user presses **음성 대화 시작** to request microphone permission.
+- The callback fires only after the model's `request_scenario` tool arguments pass the exact allowlist and the user confirms **화면에서 계속**. The caller runs the existing scenario journey; this component has no wallet signing, approval, payment, or Task mutation methods. Callback consumers must treat `taskId` as the current route's task and use their normal owner/state checks.
+- `/voice?taskId=<UUID>` shows the full panel. Confirming a scenario navigates to `/chat/<taskId>?scenario=<intent>` when a task is supplied, otherwise `/pharmacy?scenario=<intent>`. Navigation is not a purchase.
+- Auth owner, expiry, and task prop changes end a session. End and unmount stop the microphone tracks, data channel, peer connection, remote audio, and pending fetch. Explicit End attempts `session.close` and waits at most 800 ms for `session.closed` before local teardown; provider support for that event on the selected model still needs live verification. Setup has a 25-second timeout, and each client session ends at the earlier of three minutes from Start or the local auth expiry; this is not an account spend cap. Provider error and close events release the connection with a generic UI message.
+
+## BFF / 서버 경계
+
+- `POST /api/voice/session[?taskId=<UUID>]` accepts only a same-origin `application/sdp` browser request with a valid encrypted HttpOnly Floww team session. The body is limited to 16 KiB by actual stream bytes, including chunked requests, and five seconds for reading. It returns only SDP with `Cache-Control: no-store`. No browser-provided key, model, tool, prompt, identity, amount, or trusted task data is accepted.
+- When `taskId` is supplied, the BFF reads `/api/v1/tasks/<taskId>` with that user's wallet JWT, then checks the returned `ownerId` and `taskId`. Only current task status, latest policy decision, and payment status enter the conversation prompt; goal, item details, prescription information, cap, recipient, token, and raw signature do not.
+- The BFF selects `gpt-realtime-mini` (optional server-only `OPENAI_REALTIME_MODEL` override), at most 512 output tokens per response, and the one fixed `request_scenario` tool. It sends a hashed owner ID in `OpenAI-Safety-Identifier`. The permanent `OPENAI_API_KEY` remains on the server. Upstream fetch has a 12-second timeout, redirect rejection and a 32 KiB response limit. Errors are generic and contain no SDP or provider response body.
+- Startup throttle is one request per user per 10 seconds in this Node process. It is only a local burst guard: multiple instances and restarts need shared rate/spend controls before production use. The server cannot terminate a provider session after issuing an SDP answer; the client timer is an ordinary session limit, not a hard account-wide cost limit.
+
+## Evidence and remaining integration / 검증 및 남은 작업
+
+- Focused Node fixture tests cover origin/auth/media/body/owner checks, strict tool intent parsing, secret exclusion, safe timeout, resource release and microphone denial message. These fixtures do not establish live OpenAI audio or browser microphone permission. The controller owns credential injection, real WebRTC/browser validation, and chat composer wiring.
+- Official references checked 2026-09-30 KST: [OpenAI WebRTC](https://developers.openai.com/api/docs/guides/voice-webrtc), [GPT-Realtime Mini](https://developers.openai.com/api/docs/models/gpt-realtime-mini), [Realtime calls schema](https://github.com/openai/openai-node/blob/main/src/resources/realtime/calls.ts). The local Next 16 route handler guide was read from `node_modules/next/dist/docs/01-app/01-getting-started/15-route-handlers.md`.

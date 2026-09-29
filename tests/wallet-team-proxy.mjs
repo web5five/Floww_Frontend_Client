@@ -12,7 +12,7 @@ const message = `${origin} wants you to sign in with your Ethereum account:\n${a
 const token = ['eyJhbGciOiJIUzI1NiJ9', Buffer.from(JSON.stringify({sub:'fixture-user',role:'USER',aud:['client'],exp:Math.floor(Date.now()/1000)+1700})).toString('base64url'),randomBytes(32).toString('base64url')].join('.');
 const server = createServer(async(req,res)=>{
   let body=''; for await(const chunk of req) body+=chunk;
-  calls.push({path:req.url,body:JSON.parse(body),auth:req.headers.authorization});
+  calls.push({path:req.url,body:JSON.parse(body),auth:req.headers.authorization,bypass:req.headers['x-vercel-protection-bypass']});
   res.setHeader('Content-Type','application/json');
   res.end(JSON.stringify(req.url.endsWith('/nonce') ? {nonce,message,expiresAt} : {accessToken:token,tokenType:'Bearer',expiresIn:1800,user:{userId:'fixture-user',role:'USER',wallets:[{address}]}}));
 });
@@ -21,13 +21,15 @@ const req=(action,body,cookie='',requestOrigin=origin)=>walletAuthProxy(new Requ
 try {
   process.env.FLOWW_WALLET_AUTH_ENABLED='true'; process.env.FLOWW_WALLET_AUTH_MODE='team-jwt';
   process.env.FLOWW_API_BASE_URL=`http://127.0.0.1:${server.address().port}`;
+  process.env.FLOWW_SERVER_VERCEL_BYPASS_SECRET='fixture-bypass';
   delete process.env.FLOWW_SESSION_SECRET;
   assert.equal((await req('session')).status,503);
   process.env.FLOWW_SESSION_SECRET=randomBytes(32).toString('hex');
   assert.equal((await req('challenge',{},'','https://other.test')).status,403);
   const challenge=await req('challenge',{address,chainId:'11155111'});
   assert.equal(challenge.status,200); assert.equal((await challenge.json()).format,'team-jwt');
-  assert.equal(calls[0].body.chainId,11155111); assert.equal(calls[0].auth,undefined);
+  assert.equal(calls[0].body.chainId,11155111); assert.equal(calls[0].auth,undefined); assert.equal(calls[0].bypass,'fixture-bypass');
+  assert.equal(challenge.headers.get('x-vercel-protection-bypass'),null);
   const proof={challengeId:nonce,message,signature:'0x'+'11'.repeat(65)};
   assert.equal((await req('verify',proof)).status,400);
   const verified=await req('verify',proof,`floww_wallet_challenge=${nonce}`);
@@ -35,6 +37,7 @@ try {
   const session=await verified.json(); assert.equal(session.identity.address,address);
   assert.equal(JSON.stringify(session).includes(token),false);
   assert.deepEqual(calls[1].body,{message,signature:proof.signature});
+  assert.equal(calls[1].bypass,'fixture-bypass'); assert.equal(verified.headers.get('x-vercel-protection-bypass'),null);
   const cookie=verified.headers.getSetCookie().find(c=>c.startsWith('floww_wallet_session='));
   assert.match(cookie,/HttpOnly; SameSite=Strict/); assert.equal(cookie.includes(token),false);
   const pair=cookie.split(';')[0], count=calls.length;

@@ -32,41 +32,45 @@ async function setup(page: Page, mode: "ok" | "reject" | "wrong-domain" | "inval
     signedIn = true; return route.fulfill({ json: session });
   });
   await page.goto("/login");
+  await page.getByRole("button", { name: "지갑 선택", exact: true }).click();
+  await page.getByRole("button", { name: /Auth Fixture.*이 브라우저에서 감지됨/ }).click();
   await page.getByRole("button", { name: "Auth Fixture 연결", exact: true }).click();
   return () => verifies;
 }
 test("wallet login verifies once, restores session, and logout clears authentication", async ({ page }) => {
   const count = await setup(page);
   await page.getByRole("button", { name: "로그인 메시지 서명", exact: true }).evaluate((b: HTMLButtonElement) => { b.click(); b.click(); });
-  await expect(page.getByRole("link", { name: "로그인됨", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toBeVisible();
   expect(count()).toBe(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.reload();
-  await expect(page.getByRole("link", { name: "로그인됨", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "지갑 계정", exact: true }).click();
   await page.getByRole("button", { name: "로그아웃", exact: true }).click();
-  await expect(page.getByRole("link", { name: "지갑 로그인", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "지갑 연결", exact: true })).toBeVisible();
 });
 for (const mode of ["reject", "wrong-domain", "invalid"] as const) test(`wallet ${mode} never authenticates`, async ({ page }) => {
   const count = await setup(page, mode);
   await page.getByRole("button", { name: "로그인 메시지 서명", exact: true }).click();
   await expect(page.locator("main").getByRole("alert")).toBeVisible();
-  await expect(page.getByRole("link", { name: "로그인됨", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toHaveCount(0);
   expect(count()).toBe(mode === "invalid" ? 1 : 0);
 });
 test("wallet account change revokes authenticated state", async ({ page }) => {
   await setup(page);
   await page.getByRole("button", { name: "로그인 메시지 서명", exact: true }).click();
-  await expect(page.getByRole("link", { name: "로그인됨", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as { authFixture: { change(): void } }).authFixture.change());
-  await expect(page.getByRole("link", { name: "지갑 로그인", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "지갑 연결", exact: true })).toBeVisible();
 });
 for (const event of ["chainChanged", "disconnect"]) test(`wallet ${event} clears old identity safely`, async ({ page }) => {
   await setup(page);
   await page.getByRole("button", { name: "로그인 메시지 서명", exact: true }).click();
-  await expect(page.getByRole("link", { name: "로그인됨", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toBeVisible();
   await page.evaluate(name => (window as unknown as { authFixture: { emit(name: string): void } }).authFixture.emit(name), event);
-  await expect(page.getByRole("link", { name: "지갑 로그인", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Auth Fixture 연결", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "지갑 연결", exact: true })).toBeVisible();
+  await page.goto("/login");
+  await expect(page.getByRole("button", { name: "지갑 선택", exact: true })).toBeEnabled();
 });
 test("login server failure supports explicit retry without dropping wallet connection", async ({ page }) => {
   await setup(page);
@@ -78,38 +82,42 @@ test("login server failure supports explicit retry without dropping wallet conne
   const login = page.getByRole("button", { name: "로그인 메시지 서명", exact: true });
   await login.click();
   await expect(page.locator("main").getByRole("alert")).toBeVisible();
-  await expect(page.getByText("연결됨 · 미인증", { exact: true })).toBeVisible();
+  await expect(page.getByText("Auth Fixture 연결됨", { exact: true })).toBeVisible();
   await login.click();
-  await expect(page.getByRole("link", { name: "로그인됨", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toBeVisible();
 });
 test("session expiration removes authenticated identity", async ({ page }) => {
   await page.clock.install();
   await setup(page);
   await page.getByRole("button", { name: "로그인 메시지 서명", exact: true }).click();
-  await expect(page.getByRole("link", { name: "로그인됨", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toBeVisible();
   await page.clock.fastForward(310000);
+  await page.getByRole("button", { name: "로그인 계속하기", exact: true }).click();
   await expect(page.getByText("로그인 세션이 만료되었습니다.", { exact: false })).toBeVisible();
-  await expect(page.getByRole("link", { name: "로그인됨", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toHaveCount(0);
 });
 test("failed session lookup never invents login and restores after server recovery", async ({ page }) => {
   await setup(page);
   await page.getByRole("button", { name: "로그인 메시지 서명", exact: true }).click();
-  await expect(page.getByRole("link", { name: "로그인됨", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toBeVisible();
   let fail = true;
   await page.route("**/api/wallet-auth/session", route => fail ? route.fulfill({ status: 502, json: { reasonCode: "AUTH_UPSTREAM_UNAVAILABLE" } }) : route.fallback());
   await page.reload();
+  await page.goto("/login");
   await expect(page.getByText("서버 로그인 상태를 확인하지 못했습니다.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "로그인됨", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toHaveCount(0);
   fail = false;
   await page.reload();
-  await expect(page.getByRole("link", { name: "로그인됨", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toBeVisible();
 });
 test("unsupported chain is explained before requesting a signature", async ({ page }) => {
   await setup(page);
   await page.route("**/api/wallet-auth/config", route => route.fulfill({ json: { enabled: true, chainIds: ["11155111"] } }));
   await page.reload();
+  await page.getByRole("button", { name: "지갑 선택", exact: true }).click();
+  await page.getByRole("button", { name: /Auth Fixture.*이 브라우저에서 감지됨/ }).click();
   await page.getByRole("button", { name: "Auth Fixture 연결", exact: true }).click();
-  await expect(page.getByText("로그인 네트워크: Sepolia (11155111)", { exact: false })).toBeVisible();
+  await expect(page.getByText("지원하는 로그인 네트워크", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "로그인 메시지 서명", exact: true })).toBeDisabled();
 });
 
