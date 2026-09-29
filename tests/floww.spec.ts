@@ -129,6 +129,8 @@ test("landing buttons, all feature anchors and responsive layout", async ({ page
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Buy with clarity. Stay in control." })).toBeVisible();
   await expect(page.getByText("Smarter Crypto Trading", { exact: false })).toHaveCount(0);
+  await expect(page.getByText("약국 구매 비교", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Nike/)).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.screenshot({ path: `artifacts/purchase-landing-${testInfo.project.name}.png`, fullPage: true });
   await page.getByRole("link", { name: "작동 방식 보기" }).click();
@@ -137,23 +139,23 @@ test("landing buttons, all feature anchors and responsive layout", async ({ page
   for (let i = 0; i < await links.count(); i++) {
     if (!await links.nth(i).isVisible()) continue;
     await links.nth(i).click();
-    await expect(page).toHaveURL(/dashboard$/);
+    await expect(page).toHaveURL(/pharmacy$/);
     await page.getByRole("link", { name: "Overview", exact: true }).click();
   }
   for (const name of ["구매 데모 살펴보기", "구매 대시보드 살펴보기"]) {
     await page.getByRole("link", { name, exact: true }).click();
-    await expect(page).toHaveURL(/dashboard$/);
+    await expect(page).toHaveURL(/pharmacy$/);
     await page.getByRole("link", { name: "Overview", exact: true }).click();
   }
   for (const [name, id] of [
-    ["구매 조건 설정 보기", "mandate-form"],
-    ["AI 상품 조건 분석 보기", "ai-insight"],
-    ["정책 및 예산 검사 보기", "purchase-budget"],
-    ["사용자 최종 승인 보기", "purchase-approval"],
-    ["테스트넷 결제 및 증거 확인 보기", "purchase-evidence"],
+    ["구매 조건 설정 보기", "pharmacy-request"],
+    ["AI 상품 조건 분석 보기", "server-task"],
+    ["정책 및 예산 검사 보기", "pharmacy-policy"],
+    ["사용자 최종 승인 보기", "pharmacy-review"],
+    ["테스트넷 결제 및 증거 확인 보기", "pharmacy-evidence"],
   ]) {
     await page.getByRole("link", { name, exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`dashboard#${id}$`));
+    await expect(page).toHaveURL(new RegExp(`pharmacy#${id}$`));
     await expect(page.locator(`#${id}`)).toBeInViewport();
     await page.getByRole("link", { name: "Overview", exact: true }).click();
   }

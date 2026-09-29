@@ -29,6 +29,6 @@ export function WalletLogin() {
       {auth.enabled && <button className="button secondary" onClick={() => void auth.logout()}>로그아웃</button>}
       {auth.enabled && auth.mode === "team-jwt" && <p className="form-note">로그아웃은 이 앱의 세션을 해제합니다. 서버 전체 세션 종료 기능은 연결 전입니다.</p>}
       <p className="form-note"><strong>로그인은 구매 승인이 아닙니다.</strong><br />Mandate 확인과 위임된 지출 권한 승인은 별도의 절차입니다. 지갑을 연결해도 실제 구매·결제는 실행하지 않습니다.</p>
-    </Card></div><p className="form-note">기존 대시보드는 로컬 데모 및 개발용 API 테스트 영역입니다. 개발용 서버 토큰은 지갑 사용자 인증과 별개입니다.</p><Link className="text-link" href="/dashboard">구매 데모로 돌아가기 ↗</Link>
+    </Card></div><p className="form-note">기존 대시보드는 로컬 데모 및 개발용 API 테스트 영역입니다. 개발용 서버 토큰은 지갑 사용자 인증과 별개입니다.</p><Link className="text-link" href="/pharmacy">구매 데모로 돌아가기 ↗</Link>
   </main>;
 }
