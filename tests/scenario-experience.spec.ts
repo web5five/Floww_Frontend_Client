@@ -111,3 +111,24 @@ test("STOP locks subsequent workflow requests and persists across reload", async
   expect(data.posts).toHaveLength(before);
   await expect(page.locator("#scenario-progress").getByRole("region", { name: "실제 Sepolia 구매 실행" })).toHaveCount(0);
 });
+
+
+test("scenario chosen during login resolves once after the owner becomes available", async ({ page }) => {
+  const data = await fixture(page);
+  let releaseSession!: () => void;
+  const sessionGate = new Promise<void>(resolve => { releaseSession = resolve; });
+  await page.route("**/api/wallet-auth/session", async route => {
+    await sessionGate;
+    return route.fulfill({ json: { identity: { namespace: "eip155", address: owner }, chainId: "11155111", expiresAt: new Date(Date.now() + 3600000).toISOString() } });
+  });
+  await page.goto("/pharmacy");
+  await page.getByRole("button", { name: /^03 수취인 조건/ }).click();
+  expect(data.posts).toHaveLength(0);
+  releaseSession();
+  await expect(page.locator("#scenario-progress")).toContainText("허용되지 않은 수취인");
+  expect(data.posts.filter(path => path === "/api/tasks")).toHaveLength(1);
+  expect(data.posts.filter(path => path.endsWith("/attempts"))).toHaveLength(1);
+  await page.reload();
+  await expect(page.locator("#scenario-progress")).toContainText("허용되지 않은 수취인");
+  expect(data.posts.filter(path => path === "/api/tasks")).toHaveLength(1);
+});

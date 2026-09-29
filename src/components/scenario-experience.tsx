@@ -152,7 +152,7 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
       }
     } finally { if (current(scope)) { busyRef.current = false; setBusy(false); } }
   }, [current, draft, readTask]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const signature = `${owner}|${initialTaskId ?? ""}|${initialScenario ?? ""}`;
     if (bootRef.current === signature) return;
     bootRef.current = signature;
