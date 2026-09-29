@@ -10,7 +10,8 @@ test("a scenario cannot create a Task before authentication", async ({ page }) =
   const posts: string[] = [];
   page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname.startsWith("/api/tasks")) posts.push(request.url()); });
   await page.goto("/pharmacy");
-  await page.getByRole("button", { name: /예산 초과/ }).click();
-  await expect(page.getByRole("heading", { name: "지갑 로그인 후 시작하세요" })).toBeVisible();
+  await expect(page).toHaveURL(/\/login\?returnTo=/);
+  await expect(page.getByRole("heading", { name: "지갑으로 로그인하세요." })).toBeVisible();
+  await expect(page.locator(".scenario-grid button")).toHaveCount(0);
   expect(posts).toEqual([]);
 });

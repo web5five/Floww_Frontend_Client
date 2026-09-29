@@ -110,6 +110,8 @@ test("chat microphone requires a click, recovers denial, retains task and releas
 });
 
 test("auth expiry during pending microphone permission stops a late stream without opening voice", async ({ page }) => {
+  // Install before application timers exist so the shared auth and voice clocks advance together.
+  await page.clock.install({ time: new Date() });
   let voiceRequests = 0;
   const task = { taskId, status: "AWAITING_APPROVAL", statusReasonCode: null, goal: "처방 품목 구매", mandate: { mandateId: taskId, version: 1, status: "DRAFT", itemId: "acetaminophen-500mg-10", maxAmountBaseUnits: "60000000", consumedBaseUnits: "0", remainingBaseUnits: "60000000", asset: { tokenDecimals: 6, chainId: 11155111, tokenAddress: `0x${"2".repeat(40)}` }, expiresAt: new Date(Date.now() + 3600000).toISOString(), budgetScope: "TASK_CUMULATIVE" }, attempts: [], updatedAt: new Date().toISOString(), completedAt: null };
   await page.route("**/api/wallet-auth/*", route => route.fulfill({ json: route.request().url().endsWith("config")
@@ -141,11 +143,11 @@ test("auth expiry during pending microphone permission stops a late stream witho
   await page.locator(`a[href="/chat/${taskId}"]`).click();
   await page.getByRole("button", { name: "음성 대화 열기" }).click();
   const panel = page.getByRole("region", { name: "Floww 음성 대화", exact: true });
-  await page.clock.install({ time: new Date() });
   await panel.getByRole("button", { name: "음성 대화 시작", exact: true }).click();
   await expect(panel).toContainText("마이크 권한을 확인하고 있어요");
   await page.clock.fastForward(121_000);
-  await expect(panel.getByRole("button", { name: "음성 대화 시작" })).toBeDisabled();
+  await expect(panel).toHaveCount(0);
+  await expect(page).toHaveURL(/\/login\?returnTo=/);
   await page.evaluate(() => (window as unknown as { expiryVoiceFixture: { resolveMic(): void } }).expiryVoiceFixture.resolveMic());
   await expect.poll(() => page.evaluate(() => (window as unknown as { expiryVoiceFixture: { stops: number } }).expiryVoiceFixture.stops)).toBe(1);
   expect(voiceRequests).toBe(0);
