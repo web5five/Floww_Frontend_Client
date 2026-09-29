@@ -16,6 +16,7 @@ const providers = [
 
 export function WalletConnectDialog({ open, onClose }: { open: boolean; onClose(): void }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const closing = useRef(false);
   const intent = useRef(0);
   const { wallets, connection, busy, notice, connect, discover } = useWallet();
   const { connectors, connectAsync } = useConnect();
@@ -24,9 +25,16 @@ export function WalletConnectDialog({ open, onClose }: { open: boolean; onClose(
   const [sdkBusy, setSdkBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  function closeDialog() { intent.current++; setChoice(null); setDevice("desktop"); setError(""); setCopied(false); onClose(); }
+  function closeDialog() {
+    if (closing.current) return;
+    closing.current = true;
+    intent.current++;
+    setChoice(null); setDevice("desktop"); setError(""); setCopied(false);
+    if (dialog.current?.open) dialog.current.close();
+    onClose();
+  }
   useEffect(() => {
-    if (open && !dialog.current?.open) dialog.current?.showModal();
+    if (open && !dialog.current?.open) { closing.current = false; dialog.current?.showModal(); }
     if (!open && dialog.current?.open) dialog.current.close();
   }, [open]);
   useEffect(() => { if (open && connection) onClose(); }, [open, connection, onClose]);
@@ -57,7 +65,7 @@ export function WalletConnectDialog({ open, onClose }: { open: boolean; onClose(
     try { await navigator.clipboard.writeText(location.href); setCopied(true); }
     catch { setError("주소를 복사할 수 없습니다. 브라우저 주소를 직접 확인해 주세요."); }
   }
-  return <dialog ref={dialog} className={styles.dialog} aria-labelledby="wallet-dialog-title" onCancel={closeDialog} onClose={closeDialog}>
+  return <dialog ref={dialog} className={styles.dialog} aria-labelledby="wallet-dialog-title" onCancel={event => { event.preventDefault(); closeDialog(); }} onClose={() => { if (!closing.current) closeDialog(); }}>
     <div className={styles.dialogTop}>
       <button type="button" className={styles.back} onClick={() => choice ? (intent.current++, setChoice(null), setError("")) : closeDialog()}>{choice ? "← 지갑 목록" : "닫기"}</button>
       <button type="button" className={styles.close} aria-label="닫기" onClick={closeDialog}>×</button>

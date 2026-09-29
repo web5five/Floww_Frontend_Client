@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowRight, Clock3, ShieldCheck, Wallet } from "lucide-react";
 import { tasks } from "@/lib/api/task-client";
@@ -14,6 +15,8 @@ import { VoiceAgentLauncher } from "./voice-agent";
 type Draft = { goal: string; budget: string; deadline: string };
 type Intent = { key: string; input: TaskInput; taskId: string | null; requested: boolean };
 type Scope = { generation: number; owner: string; scenario: ScenarioId | null };
+export type JourneyStep = "mandate" | "decision" | "approval" | "result";
+const journeySteps: { id: JourneyStep; label: string }[] = [{ id: "mandate", label: "요청" }, { id: "decision", label: "조건 확인" }, { id: "approval", label: "지갑 승인" }, { id: "result", label: "결과" }];
 const terminal = ["COMPLETED", "DECLINED", "FAILED", "EXPIRED", "CANCELLED"];
 const defaultGoal = "이미 처방받은 의약품 1팩 구매";
 const initialDraft: Draft = { goal: defaultGoal, budget: "60", deadline: "" };
@@ -52,7 +55,8 @@ function observedPhase(owner: string, task: TaskView): JourneyPhase {
   return taskPhase(task);
 }
 
-export function ScenarioExperience({ initialScenario, taskId: initialTaskId, chat = false }: { initialScenario?: string; taskId?: string; chat?: boolean }) {
+export function ScenarioExperience({ initialScenario, taskId: initialTaskId, chat = false, step }: { initialScenario?: string; taskId?: string; chat?: boolean; step?: JourneyStep }) {
+  const router = useRouter();
   const { auth } = useWallet();
   const owner = auth.session?.identity.address ?? "";
   const [scenario, setScenario] = useState<ScenarioId | null>(isScenarioId(initialScenario) ? initialScenario : null);
@@ -60,6 +64,7 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
   const [task, setTask] = useState<TaskView | null>(null), [list, setList] = useState<TaskView[]>([]);
   const [quotes, setQuotes] = useState<TaskQuote[]>([]), [events, setEvents] = useState<TaskEvent[]>([]);
   const [phase, setPhase] = useState<JourneyPhase>("idle"), [busy, setBusy] = useState(false);
+  const [resumeTaskId, setResumeTaskId] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
   const [error, setError] = useState(""), [notice, setNotice] = useState(""), [stopped, setStopped] = useState(false);
   const generationRef = useRef(0), ownerRef = useRef(owner), scenarioRef = useRef<ScenarioId | null>(scenario);
@@ -89,7 +94,7 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
     if (sessionStorage.getItem(stopKey(id))) { stopRef.current = true; setStopped(true); }
     return next;
   }, [current]);
-  const journey = useCallback(async (scope: Scope, givenId?: string) => {
+  const journey = useCallback(async (scope: Scope, givenId?: string, evaluate = true) => {
     if (busyRef.current || stopRef.current || !scope.owner || !scope.scenario || !current(scope)) return;
     busyRef.current = true; setBusy(true); setError(""); setNotice("");
     const selected = scenarios[scope.scenario];
@@ -117,6 +122,10 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
       if (!current(scope, id) || stopRef.current) return;
       let latest = await readTask(scope, id);
       if (!latest || !current(scope, id) || stopRef.current) return;
+      if (!evaluate) {
+        if (!initialTaskId) router.push(`/journey/${encodeURIComponent(id)}/mandate?scenario=${scope.scenario}`);
+        return;
+      }
       if (latest.attempts.length || latest.status !== "AWAITING_APPROVAL") { setPhase(observedPhase(scope.owner, latest)); return; }
       if (intent?.taskId !== id) { setPhase("pending"); return; }
       if (sessionStorage.getItem(decisionKey(scope.owner, id))) {
@@ -151,9 +160,9 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
         setPhase(unresolved ? "unknown" : "error"); setError(cause instanceof Error ? cause.message : "요청 결과를 확인하지 못했습니다.");
       }
     } finally { if (current(scope)) { busyRef.current = false; setBusy(false); } }
-  }, [current, draft, readTask]);
+  }, [current, draft, readTask, initialTaskId, router]);
   useLayoutEffect(() => {
-    const signature = `${owner}|${initialTaskId ?? ""}|${initialScenario ?? ""}`;
+    const signature = `${owner}|${initialTaskId ?? ""}|${initialScenario ?? ""}|${step ?? ""}`;
     if (bootRef.current === signature) return;
     bootRef.current = signature;
     generationRef.current++;
@@ -168,17 +177,27 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
     const scope: Scope = { generation: generationRef.current, owner, scenario: selected };
     queueMicrotask(() => {
       if (generationRef.current !== scope.generation) return;
-      setGeneration(scope.generation); setScenario(selected); setTask(null); setQuotes([]); setEvents([]); setError(""); setNotice(""); setStopped(false); setBusy(false); setPhase("idle");
+      setGeneration(scope.generation); setScenario(selected); setTask(null); setQuotes([]); setEvents([]); setError(""); setNotice(""); setStopped(false); setBusy(false); setPhase("idle"); setResumeTaskId(null);
       if (!owner) return;
       if (selected) { sessionStorage.removeItem("floww-pending-scenario"); sessionStorage.setItem(activeScenarioKey(owner), selected); }
       if (initialTaskId && !selected) {
         void readTask(scope, initialTaskId).then(value => { if (value && current(scope, initialTaskId)) setPhase(observedPhase(scope.owner, value)); }).catch(cause => { if (current(scope, initialTaskId)) setError(cause instanceof Error ? cause.message : "작업을 확인하지 못했습니다."); });
       } else if (selected) {
-        try { if (initialTaskId || pendingScenario || readIntent(owner, selected)?.requested) void journey(scope, initialTaskId); }
+        try {
+          if (step === "decision" && initialTaskId) void journey(scope, initialTaskId);
+          else if (initialTaskId) void readTask(scope, initialTaskId).catch(cause => { if (current(scope, initialTaskId)) setError(cause instanceof Error ? cause.message : "작업을 확인하지 못했습니다."); });
+          else if (pendingScenario) void journey(scope, undefined, false);
+          else if (isScenarioId(initialScenario)) void journey(scope, undefined, false);
+          else {
+            const previous = readIntent(owner, selected);
+            if (previous?.taskId) setResumeTaskId(previous.taskId);
+            else if (previous?.requested) { setPhase("unknown"); setError("이전 작업 생성 결과를 확인하지 못했습니다. 내 작업을 조회해 주세요. 같은 요청을 다시 보내지 않습니다."); }
+          }
+        }
         catch (cause) { if (current(scope)) { setPhase("unknown"); setError(cause instanceof Error ? cause.message : "저장된 작업을 확인하지 못했습니다."); } }
       }
     });
-  }, [owner, initialTaskId, initialScenario, current, readTask, journey]);
+  }, [owner, initialTaskId, initialScenario, step, current, readTask, journey]);
 
   useEffect(() => {
     if (!task?.taskId || stopped || terminal.includes(task.status)) return;
@@ -197,10 +216,14 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
     sessionStorage.setItem(activeScenarioKey(owner), id);
     generationRef.current++; setGeneration(generationRef.current); stopRef.current = false; busyRef.current = false;
     scenarioRef.current = id; taskIdRef.current = null;
-    setScenario(id); setTask(null); setQuotes([]); setEvents([]); setStopped(false); setError(""); setNotice("");
+    setScenario(id); setTask(null); setQuotes([]); setEvents([]); setStopped(false); setError(""); setNotice(""); setResumeTaskId(null);
     const scope = snapshot();
-    void journey(scope);
-    document.getElementById("scenario-progress")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    try {
+      const existing = readIntent(owner, id);
+      if (existing?.taskId) { router.push(`/journey/${encodeURIComponent(existing.taskId)}/mandate?scenario=${id}`); return; }
+      if (existing?.requested) { setPhase("unknown"); setError("이전 작업 생성 결과를 먼저 확인하세요. 같은 요청을 다시 보내지 않습니다."); return; }
+      void journey(scope, undefined, false);
+    } catch (cause) { setPhase("unknown"); setError(cause instanceof Error ? cause.message : "저장된 작업을 확인하지 못했습니다."); }
   }
   function continueInChat(id: ScenarioId) {
     if (!chat || !task || !owner || busyRef.current || stopRef.current || task.status !== "AWAITING_APPROVAL" || task.attempts.length) return;
@@ -253,25 +276,34 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
   const admin = task ? auditHref(task.taskId) : null;
   const selected = scenario ? scenarios[scenario] : null;
   const executionScope: Scope = { generation, owner, scenario };
+  const journeyHref = (target: JourneyStep) => task ? `/journey/${encodeURIComponent(task.taskId)}/${target}${scenario ? `?scenario=${scenario}` : ""}` : "/pharmacy";
+  const stepIndex = journeySteps.findIndex(item => item.id === step);
+  const showOverview = !chat && !step;
 
   return <div className={`scenario-experience ${chat ? "chat-experience" : ""}`}>
-    <div className="dashboard-title"><div><span className="eyebrow">YOUR PURCHASE, YOUR CONTROL</span><h1>{chat ? "작업 대화" : "구매를 명확하게"}<span>.</span></h1><p>{chat ? "한 작업의 요청, 확인 과정과 결과를 이어서 봅니다." : "목적과 한도를 정하고, 선택된 구매만 직접 승인하세요."}</p></div></div>
-    {!chat && <><section className="scenario-intent" aria-label="구매 조건"><div><strong>구매 목적</strong><span>{draft.goal}</span></div><div><strong>전체 한도</strong><span>{draft.budget} fUSDC</span></div><div><strong>기한</strong><span>{draft.deadline ? new Date(draft.deadline).toLocaleString("ko-KR") : "시작 후 24시간"}</span></div><div><strong>판매처</strong><span>서버 견적 확인 후 결정</span></div></section><details className="card scenario-edit"><summary>구매 조건 수정</summary><div className="scenario-edit-fields"><label className="field">목적<input value={draft.goal} maxLength={500} onChange={event => setDraft(old => ({ ...old, goal: event.target.value }))} disabled={busy || !!task} /></label><label className="field">전체 한도 · fUSDC<input value={draft.budget} inputMode="decimal" onChange={event => setDraft(old => ({ ...old, budget: event.target.value }))} disabled={busy || !!task} /></label><label className="field">기한<input type="datetime-local" value={draft.deadline} onChange={event => setDraft(old => ({ ...old, deadline: event.target.value }))} disabled={busy || !!task} /></label></div><p>품목은 acetaminophen 500mg 10정입니다. 판매처와 금액은 서버 견적을 받은 뒤 확인합니다.</p></details></>}
-    {!chat && <section className="scenario-grid" aria-label="구매 시나리오 선택">{scenarioIds.map((id, index) => <button key={id} type="button" className={`scenario-card ${scenario === id ? "selected" : ""}`} aria-pressed={scenario === id} disabled={busy} onClick={() => choose(id)}><span className="scenario-number">0{index + 1}</span><h2>{scenarios[id].title}</h2><p>{scenarios[id].summary}</p><span className="scenario-card-action">{scenario === id ? "선택됨" : "이 경우 살펴보기"} <ArrowRight size={17} /></span></button>)}</section>}
+    <div className="dashboard-title"><div><span className="eyebrow">YOUR PURCHASE, YOUR CONTROL</span><h1>{chat ? "작업 대화" : step ? journeySteps[stepIndex].label : "구매를 명확하게"}<span>.</span></h1><p>{chat ? "한 작업의 요청, 확인 과정과 결과를 이어서 봅니다." : step ? "같은 작업의 실제 기록을 단계별로 확인하세요." : "목적과 한도를 정하고, 선택된 구매만 직접 승인하세요."}</p></div></div>
+    {step && <nav className="journey-step-nav" aria-label="구매 단계"><ol>{journeySteps.map((item, index) => <li key={item.id} className={index === stepIndex ? "current" : ""}>{task ? <Link href={journeyHref(item.id)} aria-current={item.id === step ? "step" : undefined}><span>0{index + 1}</span>{item.label}</Link> : <span><span>0{index + 1}</span>{item.label}</span>}</li>)}</ol></nav>}
+    {showOverview && <><section className="scenario-intent" aria-label="구매 조건"><div><strong>구매 목적</strong><span>{draft.goal}</span></div><div><strong>전체 한도</strong><span>{draft.budget} fUSDC</span></div><div><strong>기한</strong><span>{draft.deadline ? new Date(draft.deadline).toLocaleString("ko-KR") : "시작 후 24시간"}</span></div><div><strong>판매처</strong><span>서버 견적 확인 후 결정</span></div></section><details className="card scenario-edit"><summary>구매 조건 수정</summary><div className="scenario-edit-fields"><label className="field">목적<input value={draft.goal} maxLength={500} onChange={event => setDraft(old => ({ ...old, goal: event.target.value }))} disabled={busy || !!task} /></label><label className="field">전체 한도 · fUSDC<input value={draft.budget} inputMode="decimal" onChange={event => setDraft(old => ({ ...old, budget: event.target.value }))} disabled={busy || !!task} /></label><label className="field">기한<input type="datetime-local" value={draft.deadline} onChange={event => setDraft(old => ({ ...old, deadline: event.target.value }))} disabled={busy || !!task} /></label></div><p>품목은 acetaminophen 500mg 10정입니다. 판매처와 금액은 서버 견적을 받은 뒤 확인합니다.</p></details></>}
+    {showOverview && <section className="scenario-grid" aria-label="구매 시나리오 선택">{scenarioIds.map((id, index) => <button key={id} type="button" className={`scenario-card ${scenario === id ? "selected" : ""}`} aria-pressed={scenario === id} disabled={busy} onClick={() => choose(id)}><span className="scenario-number">0{index + 1}</span><h2>{scenarios[id].title}</h2><p>{scenarios[id].summary}</p><span className="scenario-card-action">{scenario === id ? "선택됨" : "이 경우 살펴보기"} <ArrowRight size={17} /></span></button>)}</section>}
     {!auth.session && <section className="card scenario-panel"><Wallet size={26} aria-hidden="true" /><h2>지갑 로그인 후 시작하세요</h2><p>지갑 연결과 서버 로그인은 별개입니다. 로그인만으로 구매를 승인하지 않습니다.</p><Link className="button primary" href="/login">지갑 로그인</Link></section>}
     {auth.session && <>
       <section id="scenario-progress" className="card scenario-panel" aria-label="구매 진행"><div className="section-heading"><h2>구매 진행</h2><span className="tag" role="status">{phaseLabel(phase)}</span></div>
         {!task && !scenario && <p>위에서 살펴볼 경우를 선택하세요.</p>}
-        {!task && scenario && <p role="status">{phase === "unknown" ? "요청 결과를 확인해야 합니다. 같은 요청을 다시 만들지 않습니다." : phase === "error" ? "진행을 확인하지 못했습니다." : `${selected?.title} 요청을 확인하고 있습니다.`}</p>}
+        {!task && scenario && <p role="status">{phase === "unknown" ? "요청 결과를 확인해야 합니다. 같은 요청을 다시 만들지 않습니다." : phase === "error" ? "진행을 확인하지 못했습니다." : resumeTaskId ? "이전에 저장한 작업을 다시 열 수 있습니다." : `${selected?.title} 요청을 확인하고 있습니다.`}</p>}
+        {!task && resumeTaskId && scenario && <Link className="button secondary" href={`/journey/${encodeURIComponent(resumeTaskId)}/mandate?scenario=${scenario}`}>이 작업 다시 열기</Link>}
         {chat && task && !attempt && phase === "pending" && !busy && task.status === "AWAITING_APPROVAL" && <div className="scenario-chat-choice"><p>이 작업에서 어떤 경우를 확인할까요?</p><div className="api-actions">{scenarioIds.map(id => <button key={id} className="button secondary" onClick={() => continueInChat(id)}>{scenarios[id].title}</button>)}</div></div>}
         {task && <><div className="scenario-facts"><div><ShieldCheck size={19} /><span>구매 목적</span><strong>{task.goal}</strong></div><div><Wallet size={19} /><span>전체 한도</span><strong>{formatFusdc(task.mandate.maxAmountBaseUnits)}</strong></div><div><Clock3 size={19} /><span>기한</span><strong>{new Date(task.mandate.expiresAt).toLocaleString("ko-KR")}</strong></div><div><span>판매처</span><strong>{activeQuote?.merchantName ?? (attempt ? merchantLabel(attempt.merchantId) : "견적 확인 중")}</strong></div></div><p className={`scenario-result ${attempt?.policy.decision === "DENY" ? "denied" : ""}`} role="status">{resultLabel(task)}</p></>}
-        <ol className="scenario-steps" aria-label="진행 단계"><li className={task ? "done" : phase === "creating" ? "current" : ""}>요청 저장</li><li className={quotes.length || !!attempt ? "done" : phase === "quotes" ? "current" : ""}>약국 견적 확인</li><li className={attempt ? "done" : phase === "checking" ? "current" : ""}>구매 조건 확인</li><li className={task?.status === "COMPLETED" ? "done" : task && canExecute(task) ? "current" : ""}>승인과 결과</li></ol>
+        {chat && <ol className="scenario-steps" aria-label="진행 단계"><li className={task ? "done" : phase === "creating" ? "current" : ""}>요청 저장</li><li className={quotes.length || !!attempt ? "done" : phase === "quotes" ? "current" : ""}>약국 견적 확인</li><li className={attempt ? "done" : phase === "checking" ? "current" : ""}>구매 조건 확인</li><li className={task?.status === "COMPLETED" ? "done" : task && canExecute(task) ? "current" : ""}>승인과 결과</li></ol>}
         <div className="api-actions"><button className="button secondary" onClick={() => void refresh()} disabled={!task || busy}>상태 다시 확인</button>{task && !stopped && !attempt && phase === "error" && scenario && <button className="button primary" onClick={() => void journey(snapshot(), task.taskId)}>이 작업 계속 확인</button>}{task && !terminal.includes(task.status) && <button className="button danger" onClick={() => void stop()} disabled={stopped}>작업 중단</button>}</div>
-        {task && canExecute(task) && !stopped && <div className="scenario-execution"><h3>선택한 구매 승인</h3><p>선택 견적과 수취인을 확인한 뒤 지갑 요청을 직접 승인하세요.</p><TaskExecution key={task.taskId} task={task} stopped={stopped} isStopped={() => stopRef.current} onTask={next => { if (next.taskId === task.taskId && current(executionScope, task.taskId) && !stopRef.current) { setTask(next); setPhase(observedPhase(executionScope.owner, next)); } }} /></div>}
-        {task && <div className="api-actions">{!chat && <Link className="text-link" href={`/chat/${task.taskId}?scenario=${scenario ?? ""}`}>이 작업을 대화로 보기 ↗</Link>}{chat && <Link className="text-link" href={`/pharmacy?taskId=${encodeURIComponent(task.taskId)}&scenario=${scenario ?? ""}`}>시나리오 화면으로 돌아가기 ↗</Link>}{admin && <a className="text-link" href={admin} target="_blank" rel="noopener noreferrer">같은 작업의 관리자 기록 ↗</a>}</div>}
+        {task && canExecute(task) && !stopped && (chat || step === "approval") && <div className="scenario-execution"><h3>선택한 구매 승인</h3><p>선택 견적과 수취인을 확인한 뒤 지갑 요청을 직접 승인하세요.</p><TaskExecution key={task.taskId} task={task} stopped={stopped} isStopped={() => stopRef.current} onTask={next => { if (next.taskId === task.taskId && current(executionScope, task.taskId) && !stopRef.current) { setTask(next); setPhase(observedPhase(executionScope.owner, next)); } }} /></div>}
+        {task && step === "mandate" && <Link className="button primary" href={journeyHref("decision")}>구매 조건 확인하기 <ArrowRight size={17} /></Link>}
+        {task && step === "decision" && attempt && <Link className="button primary" href={journeyHref(attempt.policy.decision === "ALLOW" ? "approval" : "result")}>{attempt.policy.decision === "ALLOW" ? "지갑 승인 화면" : "차단 결과 확인"} <ArrowRight size={17} /></Link>}
+        {task && step === "approval" && <Link className="text-link" href={journeyHref("result")}>현재 결과 확인 ↗</Link>}
+        {task && step === "result" && canExecute(task) && !stopped && <Link className="text-link" href={journeyHref("approval")}>지갑 승인 화면으로 돌아가기 ↗</Link>}
+        {task && <div className="api-actions">{!chat && <Link className="text-link" href={`/chat/${task.taskId}?scenario=${scenario ?? ""}`}>이 작업을 대화로 보기 ↗</Link>}{chat && <Link className="text-link" href={journeyHref(attempt?.policy.decision === "DENY" ? "result" : canExecute(task) ? "approval" : "mandate")}>시나리오 화면으로 돌아가기 ↗</Link>}{admin && <a className="text-link" href={admin} target="_blank" rel="noopener noreferrer">같은 작업의 관리자 기록 ↗</a>}</div>}
         {task && <details className="studio-details"><summary>구매 근거와 거래 기록</summary><p>{scenario && scenarios[scenario].mode === "manual" ? "이 견적은 사용자가 선택해 검사했습니다. AI가 선택한 견적이 아닙니다." : "제안과 정책 판정은 서버 기록을 기준으로 표시합니다."}</p><dl className="purchase-details"><div><dt>작업 ID</dt><dd>{task.taskId}</dd></div><div><dt>작업 상태</dt><dd>{task.status}</dd></div><div><dt>위임 버전</dt><dd>{task.mandate.mandateId} · v{task.mandate.version}</dd></div><div><dt>견적 / 시도</dt><dd>{attempt ? `${attempt.quoteId} / ${attempt.attemptId}` : "확인 전"}</dd></div><div><dt>정책</dt><dd>{attempt ? `${attempt.policy.decision} · ${attempt.policy.reasonCode ?? "사유 없음"}` : "판정 전"}</dd></div><div><dt>지급 상태</dt><dd>{attempt?.payment.status ?? "요청 전"}</dd></div></dl><AccountEvidence taskId={task.taskId} taskStatus={task.status} /></details>}
       </section>
-      {task && <section className="card scenario-panel"><div className="section-heading"><h2>{chat ? "이 작업의 대화" : "진행 알림"}</h2><span className="tag">같은 작업 기록</span></div><ol className={chat ? "chat-messages" : "journey-messages"}>{messages.map(message => <li key={message.id} className={message.role}><strong>{message.title}</strong><p>{message.body}</p>{message.at && <time dateTime={message.at}>{new Date(message.at).toLocaleString("ko-KR")}</time>}</li>)}</ol>{!events.length && <p>서버 이벤트를 아직 받지 못했습니다. 작업 상태를 다시 확인할 수 있습니다.</p>}</section>}
+      {(chat || step === "result") && task && <section className="card scenario-panel"><div className="section-heading"><h2>{chat ? "이 작업의 대화" : "진행 알림"}</h2><span className="tag">같은 작업 기록</span></div><ol className={chat ? "chat-messages" : "journey-messages"}>{messages.map(message => <li key={message.id} className={message.role}><strong>{message.title}</strong><p>{message.body}</p>{message.at && <time dateTime={message.at}>{new Date(message.at).toLocaleString("ko-KR")}</time>}</li>)}</ol>{!events.length && <p>서버 이벤트를 아직 받지 못했습니다. 작업 상태를 다시 확인할 수 있습니다.</p>}</section>}
       {chat && task && <section className="chat-voice-entry" aria-label="작업 대화 입력"><VoiceAgentLauncher key={`${owner}:${task.taskId}:${stopped}`} taskId={task.taskId} onScenarioRequest={!stopped && !busy ? voiceScenario : undefined} /><p>마이크를 눌러 이 작업에 대해 이야기하세요.</p><Link className="text-link" href={`/voice?taskId=${encodeURIComponent(task.taskId)}`}>음성 화면 크게 열기 ↗</Link></section>}
       <details className="card scenario-panel"><summary>내 작업 다시 열기</summary><button className="button secondary" onClick={() => void listTasks()}>내 작업 조회</button><div className="api-actions">{list.map(item => <Link key={item.taskId} className="text-link" href={`/chat/${item.taskId}`}>{item.goal} · {resultLabel(item)} ↗</Link>)}</div></details>
     </>}

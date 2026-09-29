@@ -39,15 +39,30 @@ test("presentation maps persisted facts to readable bubbles and gates stale auth
   expect(messages.some(message => message.body.includes("POLICY_DECIDED"))).toBe(false);
 });
 
-test("one click completes the server check, chat resumes the same task, and two denials cannot pay", async ({ page }) => {
+test("route steps preserve one Task, chat resumes it, and denials cannot pay", async ({ page }, testInfo) => {
+  test.slow();
   const data = await fixture(page);
   await page.goto("/pharmacy");
   await expect(page.locator(".scenario-intent")).toContainText("시작 후 24시간");
   for (const [scenario, reason] of [["over-budget", "예산 초과"], ["recipient", "허용되지 않은 수취인"]] as const) {
     await page.getByRole("button", { name: new RegExp(`^0[123] ${scenario === "over-budget" ? "예산 초과" : "수취인 조건"}`) }).click();
-    await expect(page.locator("#scenario-progress")).toContainText(reason);
     const taskId = [...data.items.keys()].at(-1)!;
+    await expect(page).toHaveURL(new RegExp(`/journey/${taskId}/mandate\\?scenario=${scenario}`), { timeout: 20000 });
+    await expect(page.getByRole("navigation", { name: "구매 단계" }).getByRole("link", { name: /01 요청/ })).toHaveAttribute("aria-current", "step");
+    expect(data.posts.filter(path => path.endsWith("/attempts"))).toHaveLength(scenario === "over-budget" ? 0 : 1);
+    await page.getByRole("link", { name: /구매 조건 확인하기/ }).click();
+    await expect(page).toHaveURL(new RegExp(`/journey/${taskId}/decision`));
+    await expect(page.locator("#scenario-progress")).toContainText(reason);
     await expect(page.locator("#scenario-progress").getByRole("region", { name: "실제 Sepolia 구매 실행" })).toHaveCount(0);
+    await page.getByRole("link", { name: /차단 결과 확인/ }).click();
+    await expect(page).toHaveURL(new RegExp(`/journey/${taskId}/result`));
+    await expect(page.locator(".journey-step-nav .done")).toHaveCount(0);
+    await expect(page.locator("#scenario-progress")).toContainText(reason);
+    await page.reload();
+    await expect(page.locator("#scenario-progress")).toContainText(reason);
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`/journey/${taskId}/decision`));
+    await expect(page.locator("#scenario-progress")).toContainText(reason);
     await page.locator("#scenario-progress").getByRole("link", { name: /대화로 보기/ }).click();
     await expect(page).toHaveURL(new RegExp(`/chat/${taskId}`));
     await expect(page.locator(".chat-messages .user")).toContainText("처방");
@@ -58,15 +73,24 @@ test("one click completes the server check, chat resumes the same task, and two 
     await page.getByRole("button", { name: "음성 대화 닫기" }).click();
     await expect(page.getByRole("link", {name:/음성 화면 크게/})).toHaveAttribute("href", `/voice?taskId=${taskId}`);
     await page.getByRole("link", {name:/시나리오 화면으로 돌아가기/}).click();
-    await expect(page).toHaveURL(new RegExp(`taskId=${taskId}`));
-    await expect(page.locator("#scenario-progress")).toContainText(reason);
-    await page.reload();
+    await expect(page).toHaveURL(new RegExp(`/journey/${taskId}/result`));
     await expect(page.locator("#scenario-progress")).toContainText(reason);
     await page.goto("/pharmacy");
+    await expect(page.getByRole("link", { name: "이 작업 다시 열기" })).toHaveAttribute("href", `/journey/${taskId}/mandate?scenario=${scenario}`);
   }
   await page.getByRole("button", { name: /^01 허용된 구매/ }).click();
+  const allowedId = [...data.items.keys()].at(-1)!;
+  await expect(page).toHaveURL(new RegExp(`/journey/${allowedId}/mandate`));
+  await page.screenshot({ path: `artifacts/scenario-mandate-${testInfo.project.name}.png`, fullPage: true });
+  await page.getByRole("link", { name: /구매 조건 확인하기/ }).click();
   await expect(page.locator("#scenario-progress")).toContainText("선택한 견적을 검토");
+  await expect(page.locator("#scenario-progress").getByRole("region", { name: "실제 Sepolia 구매 실행" })).toHaveCount(0);
+  await page.getByRole("link", { name: /지갑 승인 화면/ }).click();
   await expect(page.locator("#scenario-progress").getByRole("region", { name: "실제 Sepolia 구매 실행" })).toHaveCount(1);
+  await page.screenshot({ path: `artifacts/scenario-approval-${testInfo.project.name}.png`, fullPage: true });
+  await page.getByRole("link", { name: /현재 결과 확인/ }).click();
+  await expect(page.locator("#scenario-progress")).toContainText("지갑에서 승인하세요");
+  await expect(page.locator("#scenario-progress").getByRole("region", { name: "실제 Sepolia 구매 실행" })).toHaveCount(0);
   expect(data.posts.filter(path => path === "/api/tasks")).toHaveLength(3);
   expect(data.posts.filter(path => path.endsWith("/quotes"))).toHaveLength(3);
   expect(data.posts.filter(path => path.endsWith("/attempts"))).toHaveLength(2);
@@ -79,6 +103,8 @@ test("unknown proposal stays locked across reload and never silently retries", a
   const data = await fixture(page, true);
   await page.goto("/pharmacy");
   await page.getByRole("button", { name: /^01 허용된 구매/ }).click();
+  await expect(page).toHaveURL(/\/mandate\?scenario=permitted/);
+  await page.getByRole("link", { name: /구매 조건 확인하기/ }).click();
   await expect(page.locator("#scenario-progress")).toContainText("서버 결과 확인 필요");
   await page.reload();
   await expect(page.locator("#scenario-progress")).toContainText("서버 결과 확인 필요");
@@ -100,6 +126,8 @@ test("STOP locks subsequent workflow requests and persists across reload", async
   const data = await fixture(page);
   await page.goto("/pharmacy");
   await page.getByRole("button", { name: /^03 수취인 조건/ }).click();
+  await expect(page).toHaveURL(/\/mandate\?scenario=recipient/);
+  await page.getByRole("link", { name: /구매 조건 확인하기/ }).click();
   await expect(page.locator("#scenario-progress")).toContainText("허용되지 않은 수취인");
   await page.getByRole("button", { name: "작업 중단" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "후속 실행이 잠겼습니다" })).toBeVisible();
@@ -107,7 +135,6 @@ test("STOP locks subsequent workflow requests and persists across reload", async
   const before = data.posts.length;
   await page.reload();
   await expect(page.getByRole("alert").filter({ hasText: "후속 실행이 잠겼습니다" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^01 허용된 구매/ })).toBeEnabled();
   expect(data.posts).toHaveLength(before);
   await expect(page.locator("#scenario-progress").getByRole("region", { name: "실제 Sepolia 구매 실행" })).toHaveCount(0);
 });
@@ -121,10 +148,11 @@ test("scenario chosen during login resolves once after the owner becomes availab
     await sessionGate;
     return route.fulfill({ json: { identity: { namespace: "eip155", address: owner }, chainId: "11155111", expiresAt: new Date(Date.now() + 3600000).toISOString() } });
   });
-  await page.goto("/pharmacy");
-  await page.getByRole("button", { name: /^03 수취인 조건/ }).click();
+  await page.goto("/pharmacy?scenario=recipient");
   expect(data.posts).toHaveLength(0);
   releaseSession();
+  await expect(page).toHaveURL(/\/mandate\?scenario=recipient/);
+  await page.getByRole("link", { name: /구매 조건 확인하기/ }).click();
   await expect(page.locator("#scenario-progress")).toContainText("허용되지 않은 수취인");
   expect(data.posts.filter(path => path === "/api/tasks")).toHaveLength(1);
   expect(data.posts.filter(path => path.endsWith("/attempts"))).toHaveLength(1);

@@ -385,3 +385,60 @@ fieldset:disabled { opacity:1; }
 @media(max-width:760px) { .site-header .header-login { margin-left:0; }.scenario-panel { padding:22px; }.scenario-edit-fields,.scenario-intent,.scenario-facts { grid-template-columns:1fr; }.scenario-steps { grid-template-columns:repeat(2,minmax(0,1fr)); }.chat-messages li,.journey-messages li { max-width:100%; } }
 
 .chat-voice-entry{margin:20px 0 28px;padding:20px;border:1px solid var(--line,#dce5ef);border-radius:24px;background:#fff}.chat-voice-entry>p{color:#63788a;font-size:13px;margin:12px 0}.chat-voice-entry .text-link{font-size:13px}
+
+/* F034B: keep the task summary and next action visible across screen sizes. */
+.scenario-grid .scenario-card { margin-bottom:0; }
+.scenario-intent>div,.scenario-facts>div { border-radius:16px; }
+.scenario-card { gap:14px; }
+.scenario-card p { max-width:38ch; }
+.scenario-card-action { padding-top:6px; }
+.scenario-panel .section-heading { margin-bottom:18px; }
+.scenario-panel .section-heading h2 { font-size:20px; }
+.scenario-panel .api-actions .button { white-space:normal; text-align:center; }
+.chat-experience { max-width:1000px; margin-inline:auto; }
+.chat-messages li,.journey-messages li { overflow-wrap:anywhere; }
+.chat-messages li strong,.journey-messages li strong { line-height:1.5; }
+.chat-messages li p,.journey-messages li p { margin-bottom:0; }
+.chat-voice-entry { margin:0; }
+@media(max-width:760px) {
+  .site-header { row-gap:12px; }
+  .site-header nav { gap:clamp(12px,3vw,20px); }
+  .site-header nav a { min-height:44px; display:inline-flex; align-items:center; }
+  .scenario-home { padding-top:20px; padding-bottom:48px; }
+  .scenario-grid { gap:12px; margin:18px 0 22px; }
+  .scenario-card { padding:21px; gap:11px; border-radius:20px; }
+  .scenario-card h2,.scenario-card h3 { font-size:21px; }
+  .scenario-card p { font-size:14px; }
+  .scenario-intent,.scenario-facts { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+  .scenario-intent>div,.scenario-facts>div { padding:13px; gap:6px; }
+  .scenario-intent span,.scenario-facts strong { font-size:14px; }
+  .scenario-panel { padding:20px; }
+  .scenario-panel .section-heading { align-items:flex-start; }
+  .scenario-panel .section-heading h2 { font-size:18px; }
+  .scenario-steps { gap:7px; margin:18px 0; }
+  .scenario-steps li { line-height:1.45; }
+  .chat-messages li,.journey-messages li { max-width:92%; padding:15px 16px; }
+  .chat-messages li.user,.journey-messages li.user { max-width:88%; }
+  .chat-voice-entry { padding:16px; border-radius:20px; }
+}
+@media(max-width:370px) {
+  .site-header nav { gap:8px; }
+  .site-header nav a { font-size:12px; }
+  .site-header .header-login { padding-inline:13px; }
+  .scenario-intent,.scenario-facts { grid-template-columns:1fr; }
+}
+
+/* Route-backed purchase steps keep one active action in view. */
+.journey-shell { max-width:1080px; }
+.journey-step-nav ol { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; list-style:none; padding:0; margin:0; }
+.journey-step-nav li { min-width:0; border-radius:15px; background:#eff2fa; color:#59677d; font-weight:700; }
+.journey-step-nav li.current { background:#e9efff; color:#2548c8; outline:2px solid #4261ff; }
+.journey-step-nav a,.journey-step-nav li>span { display:flex; align-items:center; gap:10px; min-height:60px; padding:12px 15px; }
+.journey-step-nav a>span,.journey-step-nav li>span>span { font-size:12px; opacity:.8; }
+.journey-shell .scenario-panel { margin:0; }
+.journey-shell .scenario-panel>.button { margin-top:16px; }
+@media(max-width:760px) {
+  .journey-step-nav ol { gap:5px; }
+  .journey-step-nav a,.journey-step-nav li>span { flex-direction:column; justify-content:center; gap:3px; padding:8px 3px; min-height:61px; text-align:center; font-size:12px; line-height:1.25; }
+  .journey-shell .scenario-panel>.button { width:100%; white-space:normal; text-align:center; }
+}
