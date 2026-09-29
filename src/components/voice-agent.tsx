@@ -41,6 +41,8 @@ export function VoiceAgent({ taskId, onScenarioRequest }: { taskId?: string; onS
     const current = () => generation === serial.current && live.current === active;
     const active: Live = { abort: new AbortController() };
     live.current = active; setPhase("connecting"); setMessage("마이크 권한을 확인하고 있어요."); setLines([]); setPending(null);
+    active.timer = setTimeout(() => { if (current()) end("대화를 마쳤어요. 계속하려면 다시 시작해 주세요."); }, Math.max(0, Math.min(180000, Date.parse(sessionExpiry) - Date.now())));
+    active.setupTimer = setTimeout(() => { if (current()) { end("음성 연결 시간이 초과됐어요. 다시 시도해 주세요."); setPhase("error"); } }, 25000);
     try {
       if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === "undefined") throw new Error("UNSUPPORTED");
       const microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -58,6 +60,8 @@ export function VoiceAgent({ taskId, onScenarioRequest }: { taskId?: string; onS
         if (!current() || typeof data !== "string" || data.length > 32768) return;
         let event: Record<string, unknown>;
         try { event = JSON.parse(data); } catch { return; }
+        if (event.type === "error") { end("음성 연결을 확인하지 못했어요. 다시 시도해 주세요."); setPhase("error"); return; }
+        if (event.type === "session.closed") { end("음성 대화를 종료했어요."); return; }
         if (event.type === "input_audio_buffer.speech_started") setPhase("listening");
         if (event.type === "response.created" || event.type === "response.output_audio_transcript.delta") setPhase("speaking");
         if (event.type === "response.done") setPhase("listening");
@@ -94,7 +98,7 @@ export function VoiceAgent({ taskId, onScenarioRequest }: { taskId?: string; onS
       const answer = await result.text(); if (!current()) return;
       if (!answer.startsWith("v=0\r\n")) throw new Error("SDP");
       await peer.setRemoteDescription({ type: "answer", sdp: answer }); if (!current()) return;
-      active.timer = setTimeout(() => { if (current()) end("대화를 마쳤어요. 계속하려면 다시 시작해 주세요."); }, Math.max(0, Math.min(180000, Date.parse(sessionExpiry) - Date.now())));
+      clearTimeout(active.setupTimer); active.setupTimer = undefined;
     } catch (error) {
       if (!current()) return;
       end(connectionMessage(error));

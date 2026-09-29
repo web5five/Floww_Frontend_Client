@@ -4,6 +4,7 @@ export interface VoiceResources {
   microphone?: Pick<MediaStream, "getTracks">;
   abort: AbortController;
   timer?: ReturnType<typeof setTimeout>;
+  setupTimer?: ReturnType<typeof setTimeout>;
   audio?: Pick<HTMLAudioElement, "pause" | "srcObject">;
 }
 
@@ -13,6 +14,7 @@ export function releaseVoiceResources(active: VoiceResources | null) {
   if (!active || released.has(active)) return;
   released.add(active);
   clearTimeout(active.timer);
+  clearTimeout(active.setupTimer);
   active.abort.abort();
   active.microphone?.getTracks().forEach(track => track.stop());
   if (active.channel?.readyState !== "closed") active.channel?.close();
