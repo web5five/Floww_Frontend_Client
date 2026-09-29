@@ -10,18 +10,20 @@ export const taskErrors: Record<string, string> = {
   INVALID_RESPONSE: "서버 응답이 현재 계약과 다릅니다. 실제 상태를 확인하기 전 실행하지 않습니다.",
   CHAIN_NOT_READY: "이 작업의 Task Account가 아직 준비되지 않았거나 서버 체인 모드가 활성화되지 않았습니다.",
 };
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function taskRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`/api/tasks${path}`, { ...init, cache: "no-store" });
   let data; try { data = await response.json(); } catch { throw new Error(taskErrors.INVALID_RESPONSE); }
   if (!response.ok) { const code = data.reasonCode ?? data.error?.code ?? "INVALID_RESPONSE"; throw new Error(`${code} · ${taskErrors[code] ?? data.message?.ko ?? "요청을 처리할 수 없습니다."}`); }
   return data;
 }
+const request = taskRequest;
 function checkedTask(t: TaskView): TaskView {
-  if (!t || !uuid.test(t.taskId) || !["AWAITING_APPROVAL", "ACTIVE", "EXECUTING", "DECLINED", "CANCELLED", "EXPIRED", "COMPLETED", "FAILED"].includes(t.status) || !uuid.test(t.mandate?.mandateId) || !Number.isSafeInteger(t.mandate.version) || t.mandate.version < 1 || ![t.mandate.maxAmountBaseUnits, t.mandate.consumedBaseUnits, t.mandate.remainingBaseUnits].every(isBaseUnits) || t.mandate.asset?.tokenDecimals !== 6 || t.mandate.asset.chainId !== 11155111 || !/^0x[0-9a-f]{40}$/i.test(t.mandate.asset.tokenAddress) || !Array.isArray(t.attempts) || !t.attempts.every(a => isBaseUnits(a.amountBaseUnits) && ["ALLOW", "DENY"].includes(a.policy?.decision) && typeof a.payment?.status === "string") || !date(t.updatedAt) || !date(t.mandate.expiresAt)) throw new Error(taskErrors.INVALID_RESPONSE);
+  if (!t || !uuid.test(t.taskId) || !["DRAFT", "AWAITING_APPROVAL", "ACTIVE", "EXECUTING", "DECLINED", "CANCELLED", "EXPIRED", "COMPLETED", "FAILED"].includes(t.status) || !uuid.test(t.mandate?.mandateId) || !Number.isSafeInteger(t.mandate.version) || t.mandate.version < 1 || ![t.mandate.maxAmountBaseUnits, t.mandate.consumedBaseUnits, t.mandate.remainingBaseUnits].every(isBaseUnits) || t.mandate.asset?.tokenDecimals !== 6 || t.mandate.asset.chainId !== 11155111 || !/^0x[0-9a-f]{40}$/i.test(t.mandate.asset.tokenAddress) || !Array.isArray(t.attempts) || !t.attempts.every(a => isBaseUnits(a.amountBaseUnits) && ["ALLOW", "DENY"].includes(a.policy?.decision) && typeof a.payment?.status === "string") || !date(t.updatedAt) || !date(t.mandate.expiresAt)) throw new Error(taskErrors.INVALID_RESPONSE);
   return t;
 }
 const path = (id: string) => { if (!uuid.test(id)) throw new Error("Invalid task ID"); return `/${id}`; };
 export const tasks = {
+  attempt: (id: string, quoteId: string) => request<TaskAttempt>(`${path(id)}/attempts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quoteId, proposedBy: "USER" }) }),
   account: (id: string, signal?: AbortSignal) => request<unknown>(`${path(id)}/account`, { signal }).then(value => parseAccountEvidence(value, id)),
   list: async (signal?: AbortSignal) => { const list = await request<TaskView[]>("?limit=20", { signal }); if (!Array.isArray(list)) throw new Error(taskErrors.INVALID_RESPONSE); return list.map(checkedTask); },
   get: (id: string, signal?: AbortSignal) => request<TaskView>(path(id), { signal }).then(checkedTask),

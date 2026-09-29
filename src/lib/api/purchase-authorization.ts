@@ -1,6 +1,5 @@
-/** Canonical contract direction, not an implemented endpoint or a signing command.
- * Do not derive snapshot bytes, constructor calldata or a digest in the UI.
- * Consume reviewed backend preparations after the integration owner freezes the DTO.
+/** Canonical Floww_Server PR #41 contract. task-account.ts verifies server
+ * preparations against the pinned artifact and shared ReviewSnapshotV1 vector.
  */
 export interface MandateApprovalMessage {
   owner: string;

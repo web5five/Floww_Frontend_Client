@@ -1,5 +1,7 @@
 # CLIENT-2 pharmacy journey and Task API handoff
 
+Latest: [Task Account execution integration](task-execution-handoff.md) supersedes the disabled-wallet-execution descriptions in this historical report. Hosted acceptance remains separate.
+
 Update 2026-09-30: [purchase studio, ElevenLabs preparation and PR #41 account evidence](purchase-studio-voice.md) supersedes the original server-schema blockers below. The server now implements the TaskAccount execution sequence. This client adds owner-scoped account evidence reads; its wallet spending sequence and deployed acceptance are still pending. The following original handoff preserves the scope of PR #6.
 
 Source contract: Floww_Server `e3a7f75b2248fdfe1f8dd6a64d9659441e53edef`, `TaskController`, `TaskViews`, and the public [Task API](https://github.com/web5five/Floww_Server/blob/e3a7f75b2248fdfe1f8dd6a64d9659441e53edef/docs/TASK_API_KO_EN.md), [AI integration](https://github.com/web5five/Floww_Server/blob/e3a7f75b2248fdfe1f8dd6a64d9659441e53edef/docs/AI_TASK_INTEGRATION_KO_EN.md), [deployment record](https://github.com/web5five/Floww_Server/blob/e3a7f75b2248fdfe1f8dd6a64d9659441e53edef/docs/VERCEL_SUPABASE_DEPLOY_KO_EN.md). Older proposed-only descriptions are superseded for the implemented routes below, not for payment execution.

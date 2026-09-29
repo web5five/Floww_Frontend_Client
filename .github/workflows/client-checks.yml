@@ -18,3 +18,14 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
+      - run: npx playwright install --with-deps chrome
+      - name: Verify purchase execution and policy boundaries
+        run: |
+          npm run start -- --port 3001 > /tmp/floww-next.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3001/ > /dev/null; then break; fi
+            sleep 1
+          done
+          npm run test:e2e -- tests/task-execution.spec.ts tests/task-journey.spec.ts tests/account-evidence.spec.ts --timeout=60000

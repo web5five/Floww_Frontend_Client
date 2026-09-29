@@ -53,7 +53,7 @@ It is designed to keep the user informed and in control at every step:
 
 ## 🚧 Current State
 
-The Next.js client includes local purchase/pharmacy previews, wallet-login adapters and server-proxied API screens. Installation, lint, type checking, production build and browser tests are available. Actual spending approval, payment and verified fulfillment remain integration work.
+The Next.js client includes pharmacy previews, wallet authentication and the PR #41 Task Account execution flow: reviewed deployment, EIP-712 approval, exact token allowance/funding, order/payment, receipt reconciliation and simulated fulfillment verification. These actions require the configured owner JWT and an enabled backend. Fixture tests are not hosted E2E acceptance. See the [current integration handoff](docs/task-execution-handoff.md) for implementation, verification and remaining deployment/wallet checks.
 
 ---
 
@@ -64,9 +64,9 @@ The client foundation will grow into a working application through small, verifi
 - [x] Establish the application structure and supported runtime.
 - [x] Pin dependencies and provide a reproducible installation flow.
 - [x] Add placeholder-only environment variable examples.
-- [ ] Build the request and mandate confirmation experience.
-- [ ] Add wallet approval and transaction status screens.
-- [ ] Show progress, results, and actionable recovery states.
+- [x] Build the request and mandate confirmation experience.
+- [x] Add wallet approval and transaction status screens.
+- [x] Show progress, results, and actionable recovery states.
 - [x] Add a real build and test workflow.
 - [ ] Verify startup and health in the intended environment.
 - [ ] Deploy the client and add its live URL above.

@@ -1,10 +1,11 @@
-/** Floww_Server e3a7f75 TaskViews contract; no spending execution endpoint is enabled here. */
+/** Floww_Server TaskViews + PR #41 account execution contract. */
 export interface TaskAsset { chainId: number; tokenAddress: string; tokenDecimals: number }
 export interface TaskAttempt {
   attemptId: string; mandateId: string; mandateVersion: number; quoteId: string; merchantId: string;
   status: string; amountBaseUnits: string; recipientAddress: string;
   policy: { decision: "ALLOW" | "DENY"; reasonCode: string | null; message: { ko: string; en: string } | null };
   payment: { status: string; txHash: string | null };
+  order?: { orderId: string; status: string; paymentStatus: string } | null;
 }
 export interface TaskView {
   taskId: string; status: string; statusReasonCode: string | null; goal: string;

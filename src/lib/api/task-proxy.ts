@@ -5,6 +5,10 @@ import { openSession, teamMode, businessJwtReady } from "../auth/team-session.ts
 const uuid = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 const idPath = new RegExp(`^${uuid}$`), eventPath = new RegExp(`^${uuid}/events$`);
 const accountPath = new RegExp(`^${uuid}/account$`);
+const fundingPath = new RegExp(`^${uuid}/account/funding$`);
+const accountMutation = new RegExp(`^${uuid}/account/(prepare|bind|approval-request|signature|approve|reconcile|payment|fulfillment)$`);
+const orderPath = new RegExp(`^${uuid}/orders$`);
+const attemptPath = new RegExp(`^${uuid}/attempts$`);
 const mutationPath = new RegExp(`^${uuid}/(quotes|ai-proposal|mandate/reject|cancel)$`);
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 const fail = (reasonCode: string, status: number) => Response.json({ reasonCode }, { status, headers });
@@ -14,15 +18,15 @@ async function limited(stream: ReadableStream<Uint8Array> | null, max: number) {
   while (true) { const part = await reader.read(); if (part.done) break; length += part.value.length; if (length > max) { await reader.cancel(); throw new Error("SIZE_LIMIT"); } chunks.push(part.value); }
   return Buffer.concat(chunks).toString("utf8");
 }
-function sanitize(value: unknown, token: string): unknown {
+function sanitize(value: unknown, token: string, trail = ""): unknown {
   if (typeof value === "string") return value.split(token).join("[REDACTED]").replace(/Bearer\s+\S+/gi, "[REDACTED]");
-  if (Array.isArray(value)) return value.map(v => sanitize(v, token));
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([k]) => !/^(authorization|accessToken|refreshToken|token|secret|password|privateKey|seedPhrase|signature)$/i.test(k)).map(([k, v]) => [k.split(token).join("[REDACTED]"), sanitize(v, token)]));
+  if (Array.isArray(value)) return value.map(v => sanitize(v, token, trail));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([k,v]) => (k === "token" && trail === ".typedData.message" && typeof v === "string" && /^0x[0-9a-f]{40}$/i.test(v)) || !/^(authorization|accessToken|refreshToken|token|secret|password|privateKey|seedPhrase|signature)$/i.test(k)).map(([k, v]) => [k.split(token).join("[REDACTED]"), sanitize(v, token, `${trail}.${k}`)]));
   return value;
 }
 export async function taskProxy(request: Request, parts: string[]) {
   const path = parts.join("/"), url = new URL(request.url), post = request.method === "POST";
-  if (!(request.method === "GET" && (!path || idPath.test(path) || eventPath.test(path) || accountPath.test(path))) && !(post && (!path || mutationPath.test(path)))) return fail("ROUTE_NOT_ALLOWED", 404);
+  if (!(request.method === "GET" && (!path || idPath.test(path) || eventPath.test(path) || accountPath.test(path) || fundingPath.test(path))) && !(post && (!path || mutationPath.test(path) || accountMutation.test(path) || orderPath.test(path) || attemptPath.test(path)))) return fail("ROUTE_NOT_ALLOWED", 404);
   const allowed = eventPath.test(path) ? ["after", "limit"] : !path && !post ? ["limit"] : [];
   for (const [key, value] of url.searchParams) {
     if (!allowed.includes(key) || url.searchParams.getAll(key).length !== 1 || !/^\d{1,15}$/.test(value) || !Number.isSafeInteger(Number(value)) || (key === "limit" && (Number(value) < 1 || Number(value) > (path ? 100 : 50)))) return fail("INVALID_INPUT", 400);
@@ -42,7 +46,24 @@ export async function taskProxy(request: Request, parts: string[]) {
   if (post) {
     try {
       const raw = await limited(request.body, 8192);
-      if (path) { if (raw) return fail("INVALID_INPUT", 400); }
+      if (path) {
+        const fields = path.endsWith("/prepare") ? { attemptId: new RegExp(`^${uuid}$`), ownerAddress: /^0x[0-9a-f]{40}$/i }
+          : path.endsWith("/bind") ? { accountAddress: /^0x[0-9a-f]{40}$/i, deploymentTxHash: /^0x[0-9a-f]{64}$/i }
+          : path.endsWith("/signature") ? { signature: /^0x[0-9a-f]{130}$/i }
+          : orderPath.test(path) ? { attemptId: new RegExp(`^${uuid}$`) }
+          : attemptPath.test(path) ? { quoteId: /^[A-Za-z0-9._:-]{1,200}$/, proposedBy: /^USER$/ } : null;
+        if (fields) {
+          if (!request.headers.get("content-type")?.startsWith("application/json")) return fail("INVALID_INPUT", 400);
+          const data = JSON.parse(raw);
+          if (!data || Array.isArray(data) || Object.keys(data).length !== Object.keys(fields).length || !Object.entries(fields).every(([key, pattern]) => typeof data[key] === "string" && pattern.test(data[key]))) return fail("INVALID_INPUT", 400);
+          body = JSON.stringify(data); outbound["Content-Type"] = "application/json";
+          if (orderPath.test(path)) {
+            const key = request.headers.get("idempotency-key");
+            if (!key || !/^[A-Za-z0-9._:-]{8,128}$/.test(key)) return fail("INVALID_IDEMPOTENCY_KEY", 400);
+            outbound["Idempotency-Key"] = key;
+          }
+        } else if (raw) return fail("INVALID_INPUT", 400);
+      }
       else {
         if (!request.headers.get("content-type")?.startsWith("application/json")) return fail("INVALID_INPUT", 400);
         const data = JSON.parse(raw), future = Date.parse(data.expiresAt) - Date.now();

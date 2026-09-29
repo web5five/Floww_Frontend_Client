@@ -40,3 +40,6 @@ Refs #2. Confluence PENDING_SYNC, target 12517414 (Atlassian connector unavailab
 Local Windows Chrome: 18 purchase/rehearsal/voice cases passed on desktop/mobile, followed by 10 account-evidence and affected Task cases after the PR #41 addition (22 distinct cases overall, overlapping Task cases intentionally rerun). Next.js production build passed. No real wallet or live payment was initiated. Account/media responses in these tests are fixtures. Generator with missing credentials exited before any provider request.
 
 `npm run lint` and `npm run typecheck` passed after resolving the cleanup-ref lint warning and the test's BigInt target syntax. Desktop/mobile page captures were inspected. The local availability endpoint correctly reports `ready:false` without a recording. The existing app remains at http://127.0.0.1:3001/pharmacy during this development session; this is not a public deployment URL.
+# Latest execution update
+
+[Task Account integration](task-execution-handoff.md) now connects the wallet/execution UI described as pending below. This file preserves the PR #7 UI/voice work history; generated ElevenLabs audio and hosted wallet acceptance still need their external inputs.

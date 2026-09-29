@@ -7,7 +7,7 @@ const server = createServer(async (req, res) => {
   let body = ''; for await (const chunk of req) body += chunk;
   calls.push({ url: req.url, auth: req.headers.authorization, key: req.headers['idempotency-key'], body });
   if (redirect) { res.writeHead(302, { Location: 'https://example.invalid/protected' }); return res.end(); }
-  res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ tokenAddress: '0x' + '1'.repeat(40), reflected: 'fixture-task-jwt', accessToken: 'fixture-task-jwt', amountBaseUnits: '60000000' }));
+  res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ tokenAddress: '0x' + '1'.repeat(40), token:'fixture-task-jwt',typedData:{message:{token:'0x'+'2'.repeat(40)},domain:{name:'FlowwTaskAccount'}}, reflected: 'fixture-task-jwt', accessToken: 'fixture-task-jwt', amountBaseUnits: '60000000' }));
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const id = '11111111-1111-4111-8111-111111111111';
@@ -21,9 +21,9 @@ try {
   process.env.FLOWW_WALLET_AUTH_ENABLED='true'; process.env.FLOWW_WALLET_AUTH_MODE='team-jwt'; process.env.FLOWW_BUSINESS_JWT_ENABLED='true';
   assert.equal((await request('', 'GET', undefined, { Cookie: '' })).status,401);
   assert.equal((await request(id+'/mandate/confirm','POST',{})).status,404);
-  assert.equal((await request(id+'/orders','POST',{})).status,404);
-  assert.equal((await request(id+'/account/payment','POST',{})).status,404);
-  assert.equal((await request(id+'/account/approve','POST',{})).status,404);
+  assert.equal((await request(id+'/orders','POST',{})).status,400);
+  assert.equal((await request(id+'/account/payment','POST',{})).status,400);
+  assert.equal((await request(id+'/account/approve','POST',{})).status,400);
   assert.equal((await request(id+'/account','POST',{})).status,404);
   assert.equal((await request(id+'/ai-proposal','POST',undefined,{Origin:'https://evil.example'})).status,403);
   assert.equal((await request(id+'/ai-proposal','POST',{})).status,400);
@@ -33,11 +33,22 @@ try {
   assert.equal(calls.length,0);
   const response=await request('','POST',input,{'Idempotency-Key':'fixture-task-key'}); const value=await response.json();
   assert.equal(value.accessToken,undefined); assert.equal(value.reflected,'[REDACTED]'); assert.equal(value.tokenAddress,'0x'+'1'.repeat(40));
+  assert.equal(value.token,undefined);assert.equal(value.typedData.message.token,'0x'+'2'.repeat(40));
   assert.equal(calls[0].auth,'Bearer fixture-task-jwt'); assert.equal(calls[0].key,'fixture-task-key'); assert.equal(JSON.parse(calls[0].body).maxAmountBaseUnits,'60000000');
   assert.equal((await request(id+'/events?after=0&limit=50')).status,200);
   assert.equal((await request(id+'/account')).status,200);
   assert.equal(calls.at(-1).url,`/api/v1/tasks/${id}/account`);
   assert.equal((await request(id+'/ai-proposal','POST')).status,200); assert.equal(calls.at(-1).body,'');
+  assert.equal((await request(id+'/account/prepare','POST',{attemptId:id,ownerAddress:'0x'+'1'.repeat(40)})).status,200);
+  assert.equal((await request(id+'/account/prepare','POST',{attemptId:id,ownerAddress:'0x'+'1'.repeat(40),confirmed:true})).status,400);
+  assert.equal((await request(id+'/account/signature','POST',{signature:'0x'+'1'.repeat(130)})).status,200);
+  assert.equal((await request(id+'/account/funding')).status,200);
+  assert.equal((await request(id+'/orders','POST',{attemptId:id})).status,400);
+  assert.equal((await request(id+'/orders','POST',{attemptId:id},{'Idempotency-Key':'order-fixture-key'})).status,200);
+  assert.equal(calls.at(-1).key,'order-fixture-key');
+  assert.equal((await request(id+'/attempts','POST',{quoteId:'qt-fixture-b',proposedBy:'USER'})).status,200);
+  assert.equal((await request(id+'/attempts','POST',{quoteId:'qt-fixture-b',proposedBy:'AI'})).status,400);
+  for(const action of ['approve','reconcile','payment','fulfillment','approval-request']) assert.equal((await request(id+'/account/'+action,'POST')).status,200);
   redirect=true; assert.equal((await request()).status,502);
   console.log('task proxy JWT, allowlist, exact amounts, idempotency, redaction and protected-preview checks passed');
 } finally { await new Promise(resolve=>server.close(resolve)); }
