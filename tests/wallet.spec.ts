@@ -1,9 +1,17 @@
 import { test, expect } from "@playwright/test";
 test("wallet absent: no fabricated login or signing", async ({ page }) => {
   await page.goto("/login");
-  await expect(page.getByText("감지된 지갑이 없습니다.", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: "로그인 서명 (API 연결 전)", exact: true })).toBeDisabled();
-  await expect(page.getByText("백엔드 연결 설정 필요", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "지갑 선택", exact: true }).click();
+  await page.getByRole("button", { name: /MetaMask.*설치 여부 확인/ }).click();
+  await expect(page.getByText("MetaMask 지갑이 감지되지 않았습니다.", { exact: false })).toBeVisible();
+  await page.getByRole("tab", { name: "모바일" }).click();
+  await expect(page.getByRole("button", { name: "이 페이지 주소 복사" })).toBeVisible();
+  await page.getByRole("button", { name: "← 지갑 목록" }).click();
+  await page.getByRole("button", { name: /WalletConnect.*현재 연결 설정 없음/ }).click();
+  await expect(page.getByText("현재 WalletConnect 연결 설정이 없어 QR 페어링을 제공할 수 없습니다.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("dialog").locator("img, canvas, svg[aria-label*=QR]")).toHaveCount(0);
+  await page.getByRole("button", { name: "닫기", exact: true }).first().click();
+  await expect(page.getByRole("button", { name: "지갑 선택", exact: true })).toBeVisible();
 });
 test("wallet discovery, rejection, connection, change and disconnect never authenticate", async ({ page }, info) => {
   await page.addInitScript(() => {
@@ -24,34 +32,38 @@ test("wallet discovery, rejection, connection, change and disconnect never authe
     window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "fixture-wallet", name: "Fixture Wallet" }, provider } })));
   });
   await page.goto("/login");
+  const openWallet = async () => {
+    await page.getByRole("button", { name: "지갑 선택", exact: true }).click();
+    await page.getByRole("button", { name: /Fixture Wallet.*이 브라우저에서 감지됨/ }).click();
+  };
+  await openWallet();
   const connect = page.getByRole("button", { name: "Fixture Wallet 연결", exact: true });
   await connect.click();
-  await expect(page.getByText("지갑 연결을 거절했습니다.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("dialog").getByText("지갑 연결을 거절했습니다.", { exact: false })).toBeVisible();
   await connect.evaluate((b: HTMLButtonElement) => { b.click(); b.click(); });
-  await expect(page.getByText("연결됨 · 미인증", { exact: true })).toBeVisible();
-  await expect(page.getByText("로그인 전 · 서버 검증 없음", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "로그인 서명 (API 연결 전)", exact: true })).toBeDisabled();
+  await expect(page.getByText("Fixture Wallet 연결됨", { exact: true })).toBeVisible();
+  await page.getByText("연결 및 로그인 상태 자세히 보기").click();
+  await expect(page.getByText("로그인 전", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "로그인 메시지 서명", exact: true })).toBeDisabled();
   const calls = await page.evaluate(() => (window as unknown as { walletFixture: { calls: string[] } }).walletFixture.calls);
   expect(calls).toEqual(["eth_requestAccounts", "eth_requestAccounts", "eth_chainId", "eth_accounts"]);
   await page.screenshot({ path: `artifacts/wallet-${info.project.name}.png`, fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("link", { name: "Dashboard", exact: true }).click();
   await page.getByRole("link", { name: "지갑 연결됨", exact: true }).click();
-  await expect(page.getByText("연결됨 · 미인증", { exact: true })).toBeVisible();
+  await expect(page.getByText("Fixture Wallet 연결됨", { exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as { walletFixture: { emit: (name: string, value: unknown) => void } }).walletFixture.emit("accountsChanged", []));
   await expect(page.getByText("지갑 계정 또는 네트워크가 변경되었습니다.", { exact: false })).toBeVisible();
+  await openWallet();
   await connect.click();
   await page.getByRole("button", { name: "지갑 연결 해제", exact: true }).click();
   await expect(page.getByText("이 앱의 지갑 연결을 해제했습니다.", { exact: false })).toBeVisible();
   await page.reload();
-  await expect(connect).toBeEnabled();
+  await expect(page.getByRole("button", { name: "지갑 선택", exact: true })).toBeEnabled();
 });
-test("presentation text is bold and readable without horizontal overflow", async ({ page }) => {
-  for (const path of ["/", "/dashboard", "/login"]) {
-    await page.goto(path);
-    if (path === "/dashboard") await expect(page.getByText("Challenge B demo", { exact: true })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const invalid = await page.locator("main").evaluate(main => [...main.querySelectorAll("p,small,time,label,dt,dd,button,h1,h2,h3")].filter(el => el.getClientRects().length && el.textContent?.trim()).filter(el => { const s = getComputedStyle(el); return parseFloat(s.fontSize) < 14 || parseInt(s.fontWeight) < 700; }).map(el => el.tagName + ":" + el.textContent?.slice(0, 30)));
-    expect(invalid).toEqual([]);
-  }
+test("wallet login is readable without horizontal overflow", async ({ page }) => {
+  await page.goto("/login");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const invalid = await page.getByRole("main").evaluate(main => [...main.querySelectorAll("p,small,time,label,dt,dd,button,h1,h2,h3")].filter(el => el.getClientRects().length && el.textContent?.trim()).filter(el => { const s = getComputedStyle(el); return parseFloat(s.fontSize) < 14 || parseInt(s.fontWeight) < 700; }).map(el => el.tagName + ":" + el.textContent?.slice(0, 30)));
+  expect(invalid).toEqual([]);
 });

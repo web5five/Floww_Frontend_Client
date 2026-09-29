@@ -1,47 +1,45 @@
 "use client";
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useRouter } from "next/navigation";
-import { useAccount, useDisconnect } from "wagmi";
-import { Wallet, ShieldCheck } from "lucide-react";
+import { useDisconnect } from "wagmi";
 import { useWallet } from "./wallet-provider";
 import { authConnectionNotice } from "@/lib/auth/adapter";
-import { Card } from "./ui";
+import { WalletConnectDialog } from "./wallet-connect-dialog";
+import styles from "./wallet-login.module.css";
+
 export function WalletLogin() {
   const router = useRouter();
-  const toolkit = useAccount();
   const { disconnect: disconnectToolkit } = useDisconnect();
+  const { auth, login, connection, busy, notice, disconnect } = useWallet();
+  const [open, setOpen] = useState(false);
   const [copyNotice, setCopyNotice] = useState("");
-  const { auth, login, wallets, connection, busy, notice, connect, disconnect, discover } = useWallet();
   useEffect(() => { if (auth.phase === "authenticated" && auth.session && connection) router.push("/dashboard"); }, [auth.phase, auth.session, connection, router]);
   const unsupportedChain = !!connection && auth.supportedChainIds.length > 0 && !auth.supportedChainIds.includes(BigInt(connection.chainId).toString());
-  return <main id="main" className="page-shell wallet-shell">
-    <div className="dashboard-title"><div><span className="eyebrow">FLOWW · WALLET LOGIN</span><h1>당신의 지갑으로 시작하세요<span>.</span></h1><p>지갑 연결과 사용자 인증, 지출 승인을 각각 확인합니다.</p></div></div>
-    <div className="wallet-grid"><Card><div className="section-heading"><h2><Wallet size={19} /> 1. 지갑 연결</h2><span className="tag">{auth.session ? "인증됨" : connection ? "연결됨 · 미인증" : "연결 전"}</span></div>
-      <p className="form-note">지갑 제공자를 선택하세요. 연결 뒤 서버 로그인 메시지를 별도로 서명합니다.</p>
-      <ConnectButton.Custom>{({ mounted, openConnectModal }) => <button className="button primary" type="button" disabled={busy || !mounted || !openConnectModal || (!wallets.length && !process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim())} onClick={openConnectModal}>지갑 선택</button>}</ConnectButton.Custom>
-      <div className="wallet-options">{wallets.map(wallet => <button key={wallet.id} className="button secondary" disabled={busy || !!connection} onClick={() => void connect(wallet)}>{wallet.name} 연결</button>)}</div>
-      {!wallets.length && <p className="form-note">감지된 지갑이 없습니다. 브라우저 지갑을 준비하거나 지갑 앱에서 이 페이지를 열어주세요.</p>}
-      {!connection && <button className="text-link" disabled={busy} onClick={discover}>지갑 다시 찾기</button>}
-      {!connection && toolkit.status === "connected" && <button className="button secondary" type="button" onClick={() => { disconnect(); disconnectToolkit(); }}>지갑 연결 다시 시작</button>}
-      {busy && <p role="status">지갑에서 연결 요청을 확인해 주세요.</p>}
-      {connection && <dl className="purchase-details"><div><dt>연결 지갑</dt><dd>{connection.name}</dd></div><div><dt>연결 주소</dt><dd>{connection.address}</dd></div><div><dt>네트워크</dt><dd>{BigInt(connection.chainId) === BigInt(11155111) ? "Sepolia" : "다른 네트워크"}</dd></div><div><dt>인증 상태</dt><dd>{auth.session ? "로그인 완료 · 서버 검증됨" : "로그인 전 · 서버 검증 없음"}</dd></div></dl>}
-      {connection && <button className="button secondary" type="button" onClick={() => void navigator.clipboard.writeText(connection.address).then(() => setCopyNotice("지갑 주소를 복사했습니다.")).catch(() => setCopyNotice("주소를 복사할 수 없습니다. 상세 주소를 직접 확인해 주세요."))}>전체 주소 복사</button>}
-      {copyNotice && <p role="status">{copyNotice}</p>}
-      {(connection || busy) && <button className="button secondary" onClick={() => { disconnect(); disconnectToolkit(); }}>{busy ? "연결 요청 취소" : "지갑 연결 해제"}</button>}
-      {notice && <p className="form-note" role="status">{notice}</p>}
-    </Card><Card><div className="section-heading"><h2><ShieldCheck size={19} /> 2. 로그인 메시지 서명</h2><span className="tag">{auth.session ? "인증됨" : auth.enabled ? "로그인 대기" : "연결 전"}</span></div>
-      <p className="form-note">{auth.enabled ? "지갑 로그인 · 서버 검증" : authConnectionNotice}</p><ol className="wallet-steps"><li>서버가 발급한 일회용 로그인 메시지 확인</li><li>지갑으로 로그인 메시지 서명</li><li>서버의 서명 검증 및 세션 생성</li><li>검증된 지갑 주소로 사용자 식별</li></ol>
-      {auth.enabled && auth.supportedChainIds.length > 0 && <p className="form-note">로그인 네트워크: {auth.supportedChainIds.map(id => id === "11155111" ? "Sepolia (11155111)" : id).join(", ")}{unsupportedChain && " · 지갑에서 네트워크를 변경한 뒤 다시 연결해 주세요."}</p>}
-      <button className="button primary" disabled={!auth.enabled || !connection || auth.busy || !!auth.session || unsupportedChain} onClick={() => void login()} aria-describedby="wallet-auth-help">{auth.enabled ? "로그인 메시지 서명" : "로그인 준비 중"}</button>
-      <p id="wallet-auth-help" className="form-note">{auth.enabled ? "서버가 발급한 로그인 메시지만 서명합니다. 서버 검증에 성공해야 로그인됩니다." : "지금은 로그인에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."}</p>
-      {auth.busy && <p role="status">{auth.phase === "checking_server" ? "서버 연결을 준비하고 있어요. 서버가 대기 상태였다면 시간이 걸릴 수 있습니다." : auth.phase === "awaiting_signature" ? "지갑에서 로그인 메시지를 확인해 주세요." : "서버 로그인 상태를 확인하고 있습니다."}</p>}
-      {auth.session && <p role="status" style={{ overflowWrap: "anywhere" }}>로그인 완료 · {auth.session.identity.address}<br />만료: {new Date(auth.session.expiresAt).toLocaleString("ko-KR")}</p>}
-      {auth.error && <p role="alert">{auth.error}</p>}
-      {auth.enabled && <button className="button secondary" onClick={() => void auth.logout()}>로그아웃</button>}
-      {auth.enabled && auth.mode === "team-jwt" && <p className="form-note">로그아웃하면 이 브라우저에서 다시 로그인해야 합니다.</p>}
-      <p className="form-note"><strong>로그인은 구매 승인이 아닙니다.</strong><br />구매 조건 확인, 지출 승인, 충전과 지급은 별도 단계에서 진행합니다.</p>
-    </Card></div><Link className="text-link" href="/dashboard">작업 화면으로 돌아가기 ↗</Link>
+  const network = connection ? BigInt(connection.chainId) === BigInt(11155111) ? "Sepolia" : `Chain ${BigInt(connection.chainId).toString()}` : "";
+  return <main id="main" className={`page-shell ${styles.shell}`}>
+    <div className={styles.intro}><span className="eyebrow">FLOWW · WALLET LOGIN</span><h1>지갑으로 로그인하세요<span>.</span></h1><p>지갑 연결 후 로그인 메시지를 확인하고 서명합니다. 구매 승인은 나중에 별도로 요청합니다.</p></div>
+    <section className={styles.panel} aria-label="지갑 로그인">
+      <div className={styles.progress}><span className={connection ? styles.done : styles.active}>1 · 지갑 연결</span><span className={auth.session ? styles.done : connection ? styles.active : ""}>2 · 로그인 서명</span><span className={auth.session ? styles.done : ""}>3 · 완료</span></div>
+      {!connection ? <div className={styles.mainStep}><h2>연결할 지갑을 선택하세요</h2><p>브라우저 지갑 또는 모바일 지갑 앱에서 연결할 수 있습니다.</p>{auth.session && <p role="status" className={styles.notice}>서버 로그인 세션이 있습니다. 지갑을 다시 연결해 주소를 확인해 주세요.</p>}{auth.error && <p role="alert" className={styles.alert}>{auth.error}</p>}<button type="button" className="button primary" onClick={() => setOpen(true)}>지갑 선택</button>{auth.session && <div className={styles.actions}><button type="button" className={styles.textButton} onClick={() => void auth.logout()}>로그아웃</button></div>}<p className={styles.hint}>지갑이 없어도 화면을 둘러볼 수 있습니다. 연결 요청이 멈춘 경우 지갑 목록으로 돌아가 다시 시도하세요.</p></div>
+        : <div className={styles.mainStep}><div className={styles.connected}><span aria-hidden="true">✓</span><div><strong>{connection.name} 연결됨</strong><small>{connection.address.slice(0, 6)}…{connection.address.slice(-4)} · {network}</small></div></div>
+          <h2>{auth.session ? "로그인이 완료되었습니다" : "로그인 메시지를 서명하세요"}</h2>
+          <p>{auth.session ? "서버가 지갑 서명을 검증했습니다. 작업 화면으로 이동할 수 있습니다." : "지갑에서 Floww 로그인 메시지를 확인하고 서명해 주세요. 이 서명은 구매나 지출을 승인하지 않습니다."}</p>
+          {unsupportedChain && <p role="alert" className={styles.alert}>지원하는 로그인 네트워크로 변경한 뒤 지갑을 다시 연결해 주세요.</p>}
+          {!auth.enabled && <p className={styles.hint}>{authConnectionNotice}</p>}
+          {!auth.session && <button className="button primary" type="button" disabled={!auth.enabled || auth.busy || busy || unsupportedChain} onClick={() => void login()} aria-describedby="wallet-auth-help">{auth.busy ? "로그인 확인 중" : "로그인 메시지 서명"}</button>}
+          <p id="wallet-auth-help" className={styles.hint}>{auth.enabled ? "서버가 발급한 로그인 메시지만 서명합니다. 서버 검증에 성공해야 로그인됩니다." : "현재 서버 로그인을 사용할 수 없습니다. 연결 상태는 유지됩니다."}</p>
+          {auth.busy && <p role="status" className={styles.notice}>{auth.phase === "checking_server" ? "로그인 서버 연결 확인 중입니다." : auth.phase === "awaiting_signature" ? "지갑에서 로그인 메시지를 확인해 주세요." : "서버 로그인 상태를 확인 중입니다."}</p>}
+          {auth.error && <p role="alert" className={styles.alert}>{auth.error}</p>}
+          {auth.session && <Link href="/dashboard" className="button primary">작업 화면으로 이동</Link>}
+          <div className={styles.actions}><button type="button" className={styles.textButton} onClick={() => void navigator.clipboard.writeText(connection.address).then(() => setCopyNotice("지갑 주소를 복사했습니다.")).catch(() => setCopyNotice("주소를 복사할 수 없습니다."))}>주소 복사</button><button type="button" className={styles.textButton} onClick={() => { disconnect(); disconnectToolkit(); }}>지갑 연결 해제</button>{auth.session && <button type="button" className={styles.textButton} onClick={() => void auth.logout()}>로그아웃</button>}</div>
+          {copyNotice && <p role="status">{copyNotice}</p>}
+        </div>}
+      {notice && <p role="status" className={styles.notice}>{notice}</p>}
+      <details className={styles.details}><summary>연결 및 로그인 상태 자세히 보기</summary><dl><div><dt>지갑</dt><dd>{connection?.name ?? "연결 전"}</dd></div><div><dt>주소</dt><dd>{connection?.address ?? "연결 전"}</dd></div><div><dt>네트워크</dt><dd>{network || "연결 전"}</dd></div><div><dt>서버 인증</dt><dd>{auth.session ? `완료 · ${new Date(auth.session.expiresAt).toLocaleString("ko-KR")} 만료` : "로그인 전"}</dd></div></dl></details>
+    </section>
+    <Link className="text-link" href="/dashboard">작업 화면으로 돌아가기 ↗</Link>
+    <WalletConnectDialog open={open} onClose={() => setOpen(false)} />
   </main>;
 }
