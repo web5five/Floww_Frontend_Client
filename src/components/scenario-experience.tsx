@@ -9,6 +9,7 @@ import { canExecute, chatMessages, isScenarioId, latestAttempt, merchantLabel, p
 import { useWallet } from "./wallet-provider";
 import { TaskExecution } from "./task-execution";
 import { AccountEvidence } from "./account-evidence";
+import { VoiceAgentLauncher } from "./voice-agent";
 
 type Draft = { goal: string; budget: string; deadline: string };
 type Intent = { key: string; input: TaskInput; taskId: string | null; requested: boolean };
@@ -210,6 +211,15 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
       void journey(scope, task.taskId);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "작업 경로를 확인하지 못했습니다."); }
   }
+  function voiceScenario(id: ScenarioId) {
+    if (!task || !owner || busyRef.current || stopRef.current) return;
+    if (task.attempts.length || task.status !== "AWAITING_APPROVAL") {
+      setNotice("현재 작업의 구매 조건은 이미 확인됐어요. 진행 상황을 확인하거나 구매 승인 화면에서 계속해 주세요.");
+      void refresh();
+      return;
+    }
+    continueInChat(id);
+  }
   async function refresh() {
     if (!taskIdRef.current || !owner || busyRef.current) return;
     const scope = snapshot(), id = taskIdRef.current;
@@ -255,10 +265,11 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
         <ol className="scenario-steps" aria-label="진행 단계"><li className={task ? "done" : phase === "creating" ? "current" : ""}>요청 저장</li><li className={quotes.length || !!attempt ? "done" : phase === "quotes" ? "current" : ""}>약국 견적 확인</li><li className={attempt ? "done" : phase === "checking" ? "current" : ""}>구매 조건 확인</li><li className={task?.status === "COMPLETED" ? "done" : task && canExecute(task) ? "current" : ""}>승인과 결과</li></ol>
         <div className="api-actions"><button className="button secondary" onClick={() => void refresh()} disabled={!task || busy}>상태 다시 확인</button>{task && !stopped && !attempt && phase === "error" && scenario && <button className="button primary" onClick={() => void journey(snapshot(), task.taskId)}>이 작업 계속 확인</button>}{task && !terminal.includes(task.status) && <button className="button danger" onClick={() => void stop()} disabled={stopped}>작업 중단</button>}</div>
         {task && canExecute(task) && !stopped && <div className="scenario-execution"><h3>선택한 구매 승인</h3><p>선택 견적과 수취인을 확인한 뒤 지갑 요청을 직접 승인하세요.</p><TaskExecution key={task.taskId} task={task} stopped={stopped} isStopped={() => stopRef.current} onTask={next => { if (next.taskId === task.taskId && current(executionScope, task.taskId) && !stopRef.current) { setTask(next); setPhase(observedPhase(executionScope.owner, next)); } }} /></div>}
-        {task && <div className="api-actions">{!chat && <Link className="text-link" href={`/chat/${task.taskId}?scenario=${scenario ?? ""}`}>이 작업을 대화로 보기 ↗</Link>}{chat && <Link className="text-link" href={`/pharmacy?scenario=${scenario ?? ""}`}>시나리오 화면으로 돌아가기 ↗</Link>}{admin && <a className="text-link" href={admin} target="_blank" rel="noopener noreferrer">같은 작업의 관리자 기록 ↗</a>}</div>}
+        {task && <div className="api-actions">{!chat && <Link className="text-link" href={`/chat/${task.taskId}?scenario=${scenario ?? ""}`}>이 작업을 대화로 보기 ↗</Link>}{chat && <Link className="text-link" href={`/pharmacy?taskId=${encodeURIComponent(task.taskId)}&scenario=${scenario ?? ""}`}>시나리오 화면으로 돌아가기 ↗</Link>}{admin && <a className="text-link" href={admin} target="_blank" rel="noopener noreferrer">같은 작업의 관리자 기록 ↗</a>}</div>}
         {task && <details className="studio-details"><summary>구매 근거와 거래 기록</summary><p>{scenario && scenarios[scenario].mode === "manual" ? "이 견적은 사용자가 선택해 검사했습니다. AI가 선택한 견적이 아닙니다." : "제안과 정책 판정은 서버 기록을 기준으로 표시합니다."}</p><dl className="purchase-details"><div><dt>작업 ID</dt><dd>{task.taskId}</dd></div><div><dt>작업 상태</dt><dd>{task.status}</dd></div><div><dt>위임 버전</dt><dd>{task.mandate.mandateId} · v{task.mandate.version}</dd></div><div><dt>견적 / 시도</dt><dd>{attempt ? `${attempt.quoteId} / ${attempt.attemptId}` : "확인 전"}</dd></div><div><dt>정책</dt><dd>{attempt ? `${attempt.policy.decision} · ${attempt.policy.reasonCode ?? "사유 없음"}` : "판정 전"}</dd></div><div><dt>지급 상태</dt><dd>{attempt?.payment.status ?? "요청 전"}</dd></div></dl><AccountEvidence taskId={task.taskId} taskStatus={task.status} /></details>}
       </section>
       {task && <section className="card scenario-panel"><div className="section-heading"><h2>{chat ? "이 작업의 대화" : "진행 알림"}</h2><span className="tag">같은 작업 기록</span></div><ol className={chat ? "chat-messages" : "journey-messages"}>{messages.map(message => <li key={message.id} className={message.role}><strong>{message.title}</strong><p>{message.body}</p>{message.at && <time dateTime={message.at}>{new Date(message.at).toLocaleString("ko-KR")}</time>}</li>)}</ol>{!events.length && <p>서버 이벤트를 아직 받지 못했습니다. 작업 상태를 다시 확인할 수 있습니다.</p>}</section>}
+      {chat && task && <section className="chat-voice-entry" aria-label="작업 대화 입력"><VoiceAgentLauncher key={`${owner}:${task.taskId}:${stopped}`} taskId={task.taskId} onScenarioRequest={!stopped && !busy ? voiceScenario : undefined} /><p>마이크를 눌러 이 작업에 대해 이야기하세요.</p><Link className="text-link" href={`/voice?taskId=${encodeURIComponent(task.taskId)}`}>음성 화면 크게 열기 ↗</Link></section>}
       <details className="card scenario-panel"><summary>내 작업 다시 열기</summary><button className="button secondary" onClick={() => void listTasks()}>내 작업 조회</button><div className="api-actions">{list.map(item => <Link key={item.taskId} className="text-link" href={`/chat/${item.taskId}`}>{item.goal} · {resultLabel(item)} ↗</Link>)}</div></details>
     </>}
     {busy && <p role="status">{phaseLabel(phase)} · 같은 요청을 중복 전송하지 않습니다.</p>}{notice && <p role="status">{notice}</p>}{error && <p role="alert">{error}</p>}{stopped && <p role="alert">이 브라우저의 후속 실행이 잠겼습니다. 서버와 체인 상태를 별도로 확인하세요.</p>}

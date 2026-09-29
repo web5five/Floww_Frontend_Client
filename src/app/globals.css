@@ -383,3 +383,5 @@ fieldset:disabled { opacity:1; }
 .chat-messages time,.journey-messages time { color:var(--muted); font-size:12px; }
 @media(max-width:1000px) { .scenario-grid { grid-template-columns:1fr; }.scenario-card { min-height:0; }.scenario-facts,.scenario-intent { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:760px) { .site-header .header-login { margin-left:0; }.scenario-panel { padding:22px; }.scenario-edit-fields,.scenario-intent,.scenario-facts { grid-template-columns:1fr; }.scenario-steps { grid-template-columns:repeat(2,minmax(0,1fr)); }.chat-messages li,.journey-messages li { max-width:100%; } }
+
+.chat-voice-entry{margin:20px 0 28px;padding:20px;border:1px solid var(--line,#dce5ef);border-radius:24px;background:#fff}.chat-voice-entry>p{color:#63788a;font-size:13px;margin:12px 0}.chat-voice-entry .text-link{font-size:13px}
