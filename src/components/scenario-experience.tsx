@@ -27,22 +27,32 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
   const [quotes, setQuotes] = useState<TaskQuote[]>([]), [events, setEvents] = useState<TaskEvent[]>([]);
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
   const [stopped, setStopped] = useState(false), [ready, setReady] = useState(false), [requestLocked, setRequestLocked] = useState(false);
-  const lock = useRef(false), stopLock = useRef(false), currentTaskId = useRef<string | null>(null);
+  const lock = useRef(false), stopLock = useRef(false), currentTaskId = useRef<string | null>(null), ownerRef = useRef(owner);
+  ownerRef.current = owner;
   const selected = scenarios[scenario];
   const attempt = task ? latestAttempt(task) : undefined;
   const activeQuote = attempt ? quotes.find(quote => quote.quoteId === attempt.quoteId) : quoteForScenario(quotes, scenario);
 
   const load = useCallback(async (id: string) => {
-    const [next, page] = await Promise.all([tasks.get(id), tasks.events(id, 0)]);
+    const [next, first] = await Promise.all([tasks.get(id), tasks.events(id, 0)]);
+    const recorded = [...first.events]; let cursor = first.nextCursor, more = first.hasMore;
+    for (let page = 1; more && page < 20; page++) {
+      const nextPage = await tasks.events(id, cursor);
+      if (nextPage.nextCursor <= cursor) throw new Error("서버 이벤트 페이지가 진행되지 않습니다.");
+      recorded.push(...nextPage.events); cursor = nextPage.nextCursor; more = nextPage.hasMore;
+    }
     if (currentTaskId.current !== id) return;
-    setTask(next); setEvents(page.events);
+    setTask(next); setEvents(recorded);
+    if (more) setNotice("이전 이벤트가 더 있습니다. 전체 기록은 관리자 감사 화면에서 확인하세요.");
     setStopped(!!sessionStorage.getItem(`floww-task-stop:${id}`));
     setRequestLocked(!!sessionStorage.getItem(`floww-scenario-request:${id}`));
     stopLock.current = !!sessionStorage.getItem(`floww-task-stop:${id}`);
   }, []);
   useEffect(() => {
     if (!owner) { currentTaskId.current = null; queueMicrotask(() => { setTask(null); setEvents([]); setQuotes([]); setReady(true); }); return; }
-    const id = initialTaskId ?? sessionStorage.getItem(taskKey(owner, scenario));
+    let id: string | null;
+    try { id = initialTaskId ?? sessionStorage.getItem(taskKey(owner, scenario)); }
+    catch { currentTaskId.current = null; setTask(null); setError("작업 복구 기록을 읽을 수 없습니다. 중복 생성을 막기 위해 이 브라우저의 새 작업을 잠갔습니다."); return; }
     currentTaskId.current = id;
     queueMicrotask(() => { setTask(null); setEvents([]); setQuotes([]); setStopped(false); setRequestLocked(false); stopLock.current = false; setReady(true); });
     if (id) void load(id).catch(cause => setError(cause instanceof Error ? cause.message : "작업 조회 실패"));
@@ -73,12 +83,14 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
     if (!key) { key = crypto.randomUUID(); sessionStorage.setItem(keyName, key); }
     const result = await tasks.create(input, key);
     sessionStorage.setItem(storage, result.taskId); currentTaskId.current = result.taskId;
+    if (ownerRef.current !== owner) return;
     setTask(result); setEvents([]); setNotice("서버 작업이 생성되었습니다. 아직 구매 승인이나 지급 권한은 없습니다.");
     document.getElementById("scenario-progress")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   async function inspectQuotes() {
     if (!task) return;
     const result = await tasks.quotes(task.taskId);
+    if (ownerRef.current !== owner) return;
     if (result.mandateVersion !== task.mandate.version) throw new Error("견적과 작업 버전이 다릅니다. 새로 조회하세요.");
     setQuotes(result.quotes); setNotice("서버 견적을 받았습니다. 가격과 판매처를 확인하세요.");
   }
@@ -90,9 +102,11 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
     setRequestLocked(true);
     if (selected.mode === "ai") {
       const result = await tasks.proposal(task.taskId);
+      if (ownerRef.current !== owner) return;
       setNotice(`Kiln 제안: ${result.proposal.status} · 정책: ${result.attempt?.policy.decision ?? "결과 없음"}. 제안은 구매 승인이 아닙니다.`);
     } else {
       const result = await tasks.attempt(task.taskId, quote!.quoteId);
+      if (ownerRef.current !== owner) return;
       setNotice(`사용자가 선택한 ${quote!.merchantName} 견적의 정책 검사: ${result.policy.decision}. AI가 선택한 견적이 아닙니다.`);
     }
     await refresh();
@@ -101,7 +115,7 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
     if (!task || stopLock.current) return;
     stopLock.current = true; setStopped(true);
     sessionStorage.setItem(`floww-task-stop:${task.taskId}`, new Date().toISOString());
-    try { const fresh = await tasks.get(task.taskId); if (["AWAITING_APPROVAL", "ACTIVE", "EXECUTING"].includes(fresh.status)) setTask(await tasks.stop(fresh.taskId, fresh.status)); else setTask(fresh); setNotice("이 브라우저에서 후속 실행을 잠갔습니다. 서버 결과와 온체인 권한은 별도로 확인하세요."); }
+    try { const fresh = await tasks.get(task.taskId); const result = ["AWAITING_APPROVAL", "ACTIVE", "EXECUTING"].includes(fresh.status) ? await tasks.stop(fresh.taskId, fresh.status) : fresh; if (ownerRef.current === owner) { setTask(result); setNotice("이 브라우저에서 후속 실행을 잠갔습니다. 서버 결과와 온체인 권한은 별도로 확인하세요."); } }
     catch { setError("로컬 실행은 잠겼습니다. 서버 중단 여부는 확인되지 않았습니다. 재실행하지 말고 작업 기록을 조회하세요."); }
   }
   function choose(next: ScenarioId) { if (chat || busy) return; setScenario(next); setError(""); setNotice(""); }
