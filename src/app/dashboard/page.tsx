@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { Dashboard } from "@/components/dashboard";
-export const metadata: Metadata = { title: "Dashboard" };
-export default function DashboardPage() {
-  const configured = Boolean(process.env.FLOWW_API_BASE_URL && (process.env.FLOWW_SERVER_DEV_TOKEN || process.env.FLOWW_WALLET_AUTH_ENABLED === "true"));
-  return <main id="main" className="page-shell dashboard-shell"><Dashboard backendConfigured={configured} /></main>;
+import { ScenarioExperience } from "@/components/scenario-experience";
+export const metadata: Metadata = { title: "내 구매" };
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
+  const { scenario } = await searchParams;
+  return <main id="main" className="page-shell dashboard-shell"><ScenarioExperience initialScenario={scenario} /></main>;
 }
-export const dynamic = "force-dynamic";
