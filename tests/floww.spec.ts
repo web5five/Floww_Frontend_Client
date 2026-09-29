@@ -11,7 +11,7 @@ test("overview navigation opens the three real scenario entries", async ({ page 
     await page.locator(`#scenarios a[href="/pharmacy?scenario=${id}"]`).click();
     await expect(page).toHaveURL(new RegExp(`/pharmacy\\?scenario=${id}$`));
     await expect(page.locator(".scenario-intent")).toContainText("시작 후 24시간");
-    await expect(page.locator(".scenario-grid button[aria-pressed=true]")).toHaveCount(0);
+    await expect(page.locator(".scenario-grid button[aria-pressed=true]")).toHaveCount(1);
     await page.getByRole("link", { name: "Overview" }).click();
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
