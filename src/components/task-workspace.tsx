@@ -6,11 +6,12 @@ import { useWallet } from "./wallet-provider";
 import { tasks } from "@/lib/api/task-client";
 import { toBaseUnits, type TaskView, type TaskQuote, type TaskEvent } from "@/lib/api/task-types";
 import { formatFusdc } from "@/lib/pharmacy-preview";
+import { AccountEvidence } from "./account-evidence";
 
 export function TaskWorkspace() {
   const { auth } = useWallet();
   return <Card id="server-task" className="pharmacy-section"><div className="section-heading"><h2>서버 Task · 실제 API 연결</h2><span className="tag">서버 응답 전용 · 데모와 분리</span></div>
-    <p className="form-note">Task 생성 → 서버 약국 견적 → Kiln 제안 → 정책 판정까지 연결합니다. 모델 호출은 비용이 발생할 수 있습니다. 현재 서버·컨트랙트 승인 스키마 정렬 전이므로 실제 지출 서명·주문·결제는 활성화하지 않습니다.</p>
+    <p className="form-note">구매 요청부터 견적·AI 제안·정책 결과를 확인하세요. 모델 호출은 비용이 발생할 수 있습니다. 새 Task Account 결제 증거 조회를 지원하며, 이 앱의 지갑 지출 실행은 연결 검증 대기입니다.</p>
     {auth.session ? <AuthenticatedTasks key={auth.session.identity.address} /> : <><p>지갑 로그인 후 서버 작업을 생성하거나 조회할 수 있습니다. 환경설정이 없으면 로그인 화면에 연결 전 상태가 표시됩니다.</p><Link href="/login" className="button primary">지갑 로그인으로 이동</Link></>}
     <Link href="/dashboard#backend-workspace" className="text-link">추가 질문·AI 초안 및 기존 실행 API 화면 ↗</Link>
   </Card>;
@@ -74,7 +75,8 @@ function AuthenticatedTasks() {
       <p className="form-note">이 서버의 약국 결과는 시뮬레이터입니다. 수취 주소는 서버 설정값이며 실제 지급 가능 주소로 검증됐다는 뜻이 아닙니다. 수동 후보 선택을 AI 선택으로 표시하지 않습니다.</p>
       <div className="pharmacy-grid">{(quoteVersion === task.mandate.version ? quotes : []).map(q => <Card key={q.quoteId}><h3>{q.merchantName}</h3><p>{q.itemName}</p><p>{formatFusdc(q.totalAmountBaseUnits)}</p><p className="form-note">{q.quoteId} · {q.evidenceMode}<br />유효 기한: {new Date(q.expiresAt).toLocaleString("ko-KR")}</p></Card>)}</div>
       {task.attempts.map(a => <Card key={a.attemptId}><div className="section-heading"><h3>{a.merchantId} · {a.policy.decision}</h3><span className="tag">{a.status}</span></div><p>{a.policy.reasonCode} {a.policy.message?.ko}</p><p>{formatFusdc(a.amountBaseUnits)} · 지급 상태: {a.payment.status}</p><p className="form-note">{a.payment.txHash ? `서버 보고 해시: ${a.payment.txHash} · 영수증/이행 검증은 별도` : "거래 해시 없음 · 이것만으로 no-broadcast 증명을 대신하지 않습니다."}</p></Card>)}
-      <button className="button primary" disabled>Mandate 확인 및 위임 승인 · 체인 계약 정렬 대기</button>
+      <button className="button primary" disabled>Mandate 확인 및 위임 승인 · 지갑 실행 연결 대기</button>
+      <AccountEvidence key={task.taskId} taskId={task.taskId} taskStatus={task.status} />
       <h3>서버 이벤트 · {poll ? "5초 간격 조회" : "조회 중지"}</h3><ol className="purchase-events">{events.map(e => <li key={e.seq}><div><strong>{e.kind} · {e.state}</strong><p>{e.reasonCode} · {e.actor}</p><time dateTime={e.createdAt}>{new Date(e.createdAt).toLocaleString("ko-KR")}</time></div></li>)}</ol>
     </>}
   </>;
