@@ -1,6 +1,7 @@
 import "server-only";
 import { walletAuthEnabled, readCookie, sessionCookie } from "../auth/server.ts";
 import { teamMode, businessJwtReady, openSession } from "../auth/team-session.ts";
+import { previewBypassHeader } from "./preview-bypass.ts";
 
 const uuid = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 const detail = new RegExp(`^api/executions/${uuid}(?:/(events|evidence\\.json))?$`);
@@ -62,7 +63,7 @@ export async function proxy(request: Request, path: string[]) {
     target.pathname = `/${route}`;
     target.search = url.search;
   } catch { return error("BACKEND_NOT_CONFIGURED", 503); }
-  const outboundHeaders: Record<string, string> = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+  const outboundHeaders: Record<string, string> = { Authorization: `Bearer ${token}`, Accept: "application/json", ...previewBypassHeader(target) };
   let body: string | undefined;
   if (request.method === "POST") {
     try {

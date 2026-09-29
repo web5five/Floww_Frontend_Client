@@ -1,6 +1,7 @@
 import "server-only";
 import { walletAuthEnabled } from "../auth/server.ts";
 import { openSession, teamMode, businessJwtReady } from "../auth/team-session.ts";
+import { previewBypassHeader } from "./preview-bypass.ts";
 
 const uuid = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 const idPath = new RegExp(`^${uuid}$`), eventPath = new RegExp(`^${uuid}/events$`);
@@ -16,8 +17,9 @@ async function limited(stream: ReadableStream<Uint8Array> | null, max: number) {
   if (!stream) return "";
   const reader = stream.getReader(), chunks: Uint8Array[] = []; let length = 0;
   while (true) { const part = await reader.read(); if (part.done) break; length += part.value.length; if (length > max) { await reader.cancel(); throw new Error("SIZE_LIMIT"); } chunks.push(part.value); }
-  return Buffer.concat(chunks).toString("utf8");
+  return new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
 }
+const isJson = (value: string | null) => /^application\/json(?:\s*;\s*charset=utf-8)?\s*$/i.test(value ?? "");
 function sanitize(value: unknown, token: string, trail = ""): unknown {
   if (typeof value === "string") return value.split(token).join("[REDACTED]").replace(/Bearer\s+\S+/gi, "[REDACTED]");
   if (Array.isArray(value)) return value.map(v => sanitize(v, token, trail));
@@ -41,7 +43,7 @@ export async function taskProxy(request: Request, parts: string[]) {
     if (base.username || base.password || base.search || base.hash || base.pathname !== "/" || !(base.protocol === "https:" || (base.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(base.hostname)))) throw new Error();
     base.pathname = `/api/v1/tasks${path ? `/${path}` : ""}`; base.search = url.search;
   } catch { return fail("BACKEND_NOT_CONFIGURED", 503); }
-  const outbound: Record<string, string> = { Authorization: `Bearer ${session.accessToken}`, Accept: "application/json" };
+  const outbound: Record<string, string> = { Authorization: `Bearer ${session.accessToken}`, Accept: "application/json", ...previewBypassHeader(base) };
   let body: string | undefined;
   if (post) {
     try {
@@ -53,7 +55,7 @@ export async function taskProxy(request: Request, parts: string[]) {
           : orderPath.test(path) ? { attemptId: new RegExp(`^${uuid}$`) }
           : attemptPath.test(path) ? { quoteId: /^[A-Za-z0-9._:-]{1,200}$/, proposedBy: /^USER$/ } : null;
         if (fields) {
-          if (!request.headers.get("content-type")?.startsWith("application/json")) return fail("INVALID_INPUT", 400);
+          if (!isJson(request.headers.get("content-type"))) return fail("INVALID_INPUT", 400);
           const data = JSON.parse(raw);
           if (!data || Array.isArray(data) || Object.keys(data).length !== Object.keys(fields).length || !Object.entries(fields).every(([key, pattern]) => typeof data[key] === "string" && pattern.test(data[key]))) return fail("INVALID_INPUT", 400);
           body = JSON.stringify(data); outbound["Content-Type"] = "application/json";
@@ -65,7 +67,7 @@ export async function taskProxy(request: Request, parts: string[]) {
         } else if (raw) return fail("INVALID_INPUT", 400);
       }
       else {
-        if (!request.headers.get("content-type")?.startsWith("application/json")) return fail("INVALID_INPUT", 400);
+        if (!isJson(request.headers.get("content-type"))) return fail("INVALID_INPUT", 400);
         const data = JSON.parse(raw), future = Date.parse(data.expiresAt) - Date.now();
         if (Object.keys(data).some(k => !["goal", "itemId", "maxAmountBaseUnits", "expiresAt"].includes(k)) || typeof data.goal !== "string" || !data.goal.trim() || data.goal.length > 500 || !["acetaminophen-500mg-10", "ibuprofen-200mg-20"].includes(data.itemId) || typeof data.maxAmountBaseUnits !== "string" || !/^[1-9][0-9]{0,77}$/.test(data.maxAmountBaseUnits) || typeof data.expiresAt !== "string" || !data.expiresAt.endsWith("Z") || !(future > 0 && future <= 30 * 86400000)) return fail("INVALID_INPUT", 400);
         if (BigInt(data.maxAmountBaseUnits) > (BigInt(1) << BigInt(256)) - BigInt(1)) return fail("INVALID_INPUT", 400);
@@ -76,7 +78,7 @@ export async function taskProxy(request: Request, parts: string[]) {
     } catch { return fail("INVALID_INPUT", 400); }
   }
   try {
-    const response = await fetch(base, { method: request.method, body, headers: outbound, redirect: "manual", cache: "no-store", signal: AbortSignal.any([request.signal, AbortSignal.timeout(path.endsWith("ai-proposal") ? 120000 : 20000)]) });
+    const response = await fetch(base, { method: request.method, body, headers: outbound, redirect: "error", cache: "no-store", signal: AbortSignal.any([request.signal, AbortSignal.timeout(path.endsWith("ai-proposal") ? 120000 : 20000)]) });
     if (response.status >= 300 && response.status < 400) return fail("BACKEND_ACCESS_PROTECTED", 502);
     const data = sanitize(JSON.parse(await limited(response.body, 4 * 1024 * 1024)), session.accessToken);
     return Response.json(data, { status: response.status, headers });

@@ -2,6 +2,7 @@ import "server-only";
 import { walletBackendHealth } from "./health.ts";
 import { teamMode, businessJwtReady } from "./team-session.ts";
 import { teamWalletProxy } from "./team-server.ts";
+import { previewBypassHeader } from "../api/preview-bypass.ts";
 
 export const walletAuthEnabled = () => process.env.FLOWW_WALLET_AUTH_ENABLED === "true";
 export const sessionCookie = "floww_wallet_session";
@@ -61,7 +62,7 @@ export async function walletAuthProxy(request: Request, action: string) {
   if (action === "verify" || action === "logout") responseHeaders.append("Set-Cookie", cookie(challengeCookie, "", 0, secure));
   if (action === "logout") responseHeaders.append("Set-Cookie", cookie(sessionCookie, "", 0, secure));
   try {
-    const upstream = await fetch(target, { method: spec[0], headers: { Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}), ...(["session", "logout"].includes(action) && session ? { Authorization: `Bearer ${session}` } : {}) }, body, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000) });
+    const upstream = await fetch(target, { method: spec[0], headers: { Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}), ...(["session", "logout"].includes(action) && session ? { Authorization: `Bearer ${session}` } : {}), ...previewBypassHeader(target) }, body, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000) });
     if (action === "logout") return Response.json({ revoked: upstream.ok }, { status: upstream.ok ? 200 : 502, headers: responseHeaders });
     if (action === "session" && upstream.status === 401) {
       responseHeaders.append("Set-Cookie", cookie(sessionCookie, "", 0, secure));
