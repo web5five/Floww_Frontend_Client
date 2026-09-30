@@ -57,6 +57,8 @@ async function taskSummary(taskId: string, userId: string, token: string): Promi
 }
 
 export async function createVoiceSession(request: Request): Promise<Response> {
+  // Submission inference is limited to Kiln; stored provider keys must not enable voice.
+  if (process.env.FLOWW_VOICE_ENABLED !== "true") return fail("VOICE_DISABLED", 503);
   const url = new URL(request.url);
   const ids = url.searchParams.getAll("taskId");
   const locales = url.searchParams.getAll("locale");

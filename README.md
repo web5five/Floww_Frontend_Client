@@ -11,8 +11,8 @@ Floww is a Next.js client for requesting a purchase, reviewing its limits and ev
 | `/login` | MetaMask browser wallet or Magic email wallet, then the same server SIWE challenge, verification, and HttpOnly session. |
 | `/pharmacy` | Three authenticated purchase scenarios: permitted, over budget, and recipient condition. |
 | `/journey/[taskId]/[step]` | Same-Task mandate, quotes, policy, approval, execution, and result views. |
-| `/chat/[taskId]` | Same-Task event conversation, bounded display-language input, and voice entry. |
-| `/voice` | Voice conversation tied to the current Task; scenario requests return to an explicit on-screen confirmation. |
+| `/chat/[taskId]` | Same-Task event conversation and bounded display-language input. Voice entry is disabled by default. |
+| `/voice` | Redirects to the current Task chat (or `/pharmacy`) while voice is disabled. |
 | `/dashboard` | Owner-scoped Task reopening and status. |
 
 The Task Account path checks the server proposal, exact amount and recipient, wallet approval, funding, payment state, receipts, and fulfillment evidence. `DENY` and unknown payment state remain explicit. The app does not automatically re-send an uncertain payment, and voice cannot approve or pay. The selected display language changes the product UI; it does not rewrite persisted Task content, user input, or signed payloads. See the [integrated Client handoff](docs/F033_INTEGRATED_CLIENT_HANDOFF.md), [Task Account handoff](docs/task-execution-handoff.md), [voice contract](docs/F033D_VOICE_CONTRACT.md), and [F036 locale worklog](reports/F036_INTEGRATED_LOCALE_ACCEPTANCE.md).
@@ -51,7 +51,7 @@ Browser tests need an existing Chrome or an explicitly configured `PLAYWRIGHT_CH
 
 ## Configuration and authority
 
-Copy `.env.example` to an untracked `.env.local` and set only the values needed for the target environment. `FLOWW_API_BASE_URL`, wallet auth mode, allowed chain IDs, session encryption secret, and business JWT flag are server-side configuration. `OPENAI_API_KEY` is server-only for live voice. Never put a Magic secret key, backend token, or session secret in a `NEXT_PUBLIC_*` variable.
+Copy `.env.example` to an untracked `.env.local` and set only the values needed for the target environment. `FLOWW_API_BASE_URL`, wallet auth mode, allowed chain IDs, session encryption secret, and business JWT flag are server-side configuration. Submission voice is disabled by default with `FLOWW_VOICE_ENABLED=false` (server enforcement) and `NEXT_PUBLIC_FLOWW_VOICE_ENABLED=false` (build-time UI). Keys alone cannot enable OpenAI Realtime or the manual ElevenLabs generator. Keep both flags false in the submission deployment; changing the public flag requires a rebuild. Separate provider/rules approval is required before explicitly setting both flags to `true`. `OPENAI_API_KEY` remains server-only. See [submission voice gate](docs/submission-voice-gate.md). Never put a Magic secret key, backend token, or session secret in a `NEXT_PUBLIC_*` variable.
 
 `NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY` accepts only a `pk_`-format publishable key. Without it, the Magic choice is visible but disabled before SDK or OTP calls. With it, `magic-sdk@33.13.0` loads on the user's email action and requests Sepolia through the explicit RPC URL and chain ID. Next.js freezes `NEXT_PUBLIC_*` values into the browser bundle at **build time**, so a configured Preview needs the approved publishable key and exact Magic domain allowlist before its build. Both Magic and MetaMask must still pass the same server nonce, exact SIWE message, verification, and owner-scoped session; an email address, Magic DID, or provider label is not identity. Sign-in grants no spending approval. See the [Magic product handoff](docs/F037_MAGIC_WALLET_UI_KO_EN.md).
 

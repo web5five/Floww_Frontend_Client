@@ -49,6 +49,18 @@ globalThis.fetch = async (url, options) => {
 };
 const request = (body = sdp, { requestOrigin = origin, requestCookie = cookie, query = '', type = 'application/sdp' } = {}) => new Request(`${origin}/api/voice/session${query}`, { method: 'POST', headers: { Host: 'localhost:3201', Origin: requestOrigin, Cookie: requestCookie, 'Content-Type': type }, body });
 try {
+  // Provider credentials and a public UI opt-in must not bypass the server gate.
+  process.env.NEXT_PUBLIC_FLOWW_VOICE_ENABLED = 'true';
+  for (const flag of [undefined, '', 'false', 'TRUE', '1']) {
+    if (flag === undefined) delete process.env.FLOWW_VOICE_ENABLED;
+    else process.env.FLOWW_VOICE_ENABLED = flag;
+    const disabled = await createVoiceSession(request(sdp, {query:`?taskId=${taskId}`}));
+    assert.equal(disabled.status,503);
+    assert.equal(disabled.headers.get('Cache-Control'),'no-store');
+    assert.deepEqual(await disabled.json(), {reasonCode:'VOICE_DISABLED'});
+    assert.equal(calls.length,0);
+  }
+  process.env.FLOWW_VOICE_ENABLED = 'true';
   assert.equal((await createVoiceSession(request(sdp, {requestOrigin:'https://localhost:3201'}))).status,403);
   assert.equal((await createVoiceSession(request(sdp, {requestCookie:''}))).status,401);
   assert.equal((await createVoiceSession(request(sdp, {type:'text/plain'}))).status,415);
@@ -91,5 +103,5 @@ try {
   assert.equal(localeFromTool({locale:'ko'}),'ko');
   assert.equal(localeFromTool({locale:'en'}),'en');
   for (const invalid of [{locale:'fr'}, {locale:'EN'}, {locale:'en',taskId}, {}, null, 'en']) assert.equal(localeFromTool(invalid),null);
-  console.log('Voice auth, origin, body, owner context, locale, secret exclusion, throttle and tool allowlist passed');
+  console.log('Voice default-off zero-outbound gate, auth, origin, body, owner context, locale, secret exclusion, throttle and tool allowlist passed');
 } finally { globalThis.fetch = originalFetch; }

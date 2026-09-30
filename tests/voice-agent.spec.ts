@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
+test.skip(process.env.NEXT_PUBLIC_FLOWW_VOICE_ENABLED !== "true", "Voice fixtures require explicit UI opt-in in both the build and test process.");
+
 const taskId = "11111111-1111-4111-8111-111111111111";
 const owner = `0x${"1".repeat(40)}`;
 
