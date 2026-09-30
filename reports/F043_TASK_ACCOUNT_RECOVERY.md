@@ -1,0 +1,29 @@
+# F043 Task Account restoration worklog
+
+**2026-09-30 10:19 KST · Client implementation worker (Codex) · component owner: Sinwoo Park (not an approval).** Task `task_b7a3c853d1af`; branch `fix/task-account-restore`; base `origin/main` `5be68d257d979a313ec7f4303bef49b481ada270`; focused source/test commit `d8dfd10`. No push, merge, deployment, signer, live chain, payment, or model call. Current Confluence architecture page `11927569` and workflow page `12517414` were not available through an Atlassian MCP tool in this dispatch; this local record is `PENDING_SYNC`, not a claim that either page was read at a current version.
+
+## Change and reason
+
+The frozen F042 contract audit at local commit `f5ad46c` identified that `TaskExecution` began with `account = null` after reload or route return. An already signed Task is `ACTIVE`, and an ordered Task is `EXECUTING`; their old preparation button could not pass the Server's `AWAITING_APPROVAL` guard. The user had to discover and click a secondary account-status action to recover.
+
+- [`src/components/task-execution.tsx`](../src/components/task-execution.tsx): on mount or owner/Task change, restore local recovery markers, then read fresh Task and AccountView through the existing BFF. Validate the Account against owner, ALLOW attempt, mandate ID/version, token, exact base-unit amount, recipient, review digest and expiry before exposing state-specific controls. A generation/scope guard drops stale responses after Task/owner change, STOP, or unmount. Loading and failed reads disable mutations; a read-only retry is available after a network/schema/auth failure. No prepare, wallet send, payment, or other mutation is started during hydration.
+- A `CHAIN_NOT_READY` Account GET is treated as a possible unprepared Account only when the fresh Task is `AWAITING_APPROVAL`, has a matching ALLOW attempt, and no saved wallet/server recovery operation exists. The UI also notes that chain availability may need checking because the Server uses this code for absent Account *and* disabled/unready chain ([Server `TaskAccountService.java` lines 56–70](https://github.com/web5five/Floww_Server/blob/153b5f3e78467f1dc5cbc8d58d9c86ee52aaf8c6/src/main/java/com/floww/server/taskaccount/TaskAccountService.java#L56-L70)). Other `CHAIN_NOT_READY`, `UNAUTHORIZED`, network, and invalid Account responses lock actions for retry. A validated state transition may clear a resolved server marker; an unresolved marker and pending wallet hash remain in session storage.
+- [`tests/task-account-recovery.spec.ts`](../tests/task-account-recovery.spec.ts): explicit browser API fixtures cover approved route return/reload, PAYMENT_UNKNOWN and PAID with one preserved payment hash, legitimate unprepared state, disallowed ACTIVE `CHAIN_NOT_READY`, failed lookup/manual retry, preserved unknown server and wallet markers, wrong owner, and stale Task/unmount response. Mutating API routes in these fixtures respond with 409 and are asserted absent during restoration. The fixtures are not hosted or chain proof.
+
+This reuses the Server's existing Task/Account API and signed payload contract. No backend, schema, wallet/auth provider, existing test file, or payment logic changed. The F042 report is local history in this checkout, outside the new `origin/main` branch.
+
+## Checks and observed limits
+
+| Check | Exact command or setup | Result |
+| --- | --- | --- |
+| Branch baseline | `git fetch origin main`; `git switch -c fix/task-account-restore origin/main` | Fetched main `5be68d2`; old report branch retained; starting tree clean. |
+| Types | Node 24 from `/Users/geondongkim/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin`, `npm run typecheck` | Passed; `next typegen` and `tsc --noEmit`. |
+| Lint | Same Node path, `./node_modules/.bin/eslint src/components/task-execution.tsx tests/task-account-recovery.spec.ts --max-warnings=0` | Passed. |
+| New focused browser fixtures | `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/Users/geondongkim/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell ./node_modules/.bin/playwright test tests/task-account-recovery.spec.ts` against own `next dev` on free port 3001 | **14/14 passed** across desktop and mobile. Local fixture responses only. |
+| Existing scenario guards | `./node_modules/.bin/playwright test tests/scenario-experience.spec.ts tests/task-execution.spec.ts --project=desktop` with same executable and port | Scenario tests **6/6 passed**. Task-execution golden-vector and DENY tests **2/6 passed**; four old flow tests timed out waiting for the preparation button because their mock returns PREPARED AccountView on the initial GET, before the supposed POST prepare. The correct restored UI shows Deploy. |
+
+The four old execution fixture failures are test-contract drift, not evidence of a real Server failure: the actual Server returns `CHAIN_NOT_READY` before an Account exists, while [`tests/task-execution.spec.ts` lines 71–85](../tests/task-execution.spec.ts) returns its in-memory PREPARED account for every Account GET. B owns that existing test and received the exact mismatch; it needs to return 409 on the initial Account GET until its fixture processes `/prepare`. The source commit `d8dfd10` and this limitation were sent to the coordinator and B through Orca. I did not edit B's test. The dev server was stopped and its generated `next-env.d.ts` change restored to the branch baseline; only the three owned paths remain in this branch.
+
+## Handoff
+
+Source implementation and focused tests are complete and locally tested. Root/C can review `d8dfd10`; B should align its existing fixture with the Server's no-account response before the combined regression/build. Root owns integration with F037, final CI, deployment, human browser acceptance, and any decision about the pending Sepolia operation. No live Task Account recovery or transaction was claimed here.

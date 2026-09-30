@@ -1,109 +1,103 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useConnect } from "wagmi";
 import { useWallet } from "./wallet-provider";
-import { type WalletOption } from "@/lib/auth/wallet";
-import styles from "./wallet-login.module.css";
 import { translateWalletNotice, useLocale } from "@/lib/i18n";
+import type { MagicErrorCode } from "@/lib/auth/magic";
+import styles from "./wallet-login.module.css";
 
-type Choice = "metamask" | "coinbase" | "walletconnect" | string;
-type DialogError = "walletconnect" | "missing" | "copy" | "rejected" | "pending" | "disconnected" | "unknown" | "";
-const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim() ?? "";
-const providers = [
-  { id: "metamask", name: "MetaMask", match: /meta\s?mask/i },
-  { id: "coinbase", name: "Coinbase Wallet", match: /coinbase/i },
-  { id: "walletconnect", name: "WalletConnect", match: null },
-] as const;
+type Choice = "metamask" | "magic" | null;
+const magicMessages: Record<MagicErrorCode, [string, string]> = {
+  CONFIG: ["Magic 로그인이 아직 설정되지 않았습니다.", "Magic sign-in is not configured yet."],
+  EMAIL: ["올바른 이메일 주소를 입력해 주세요.", "Enter a valid email address."],
+  PENDING: ["이전 로그인 요청이 아직 끝나지 않았습니다. 완료를 기다리거나 새로고침해 주세요.", "A previous sign-in request is still pending. Wait for it to finish or reload this page."],
+  CANCELLED: ["이메일 로그인을 취소했습니다. 이전 요청이 끝나기 전에는 다시 시작할 수 없습니다.", "Email sign-in was cancelled. You cannot start another until the previous request settles."],
+  SDK: ["Magic 지갑을 열지 못했습니다. 잠시 후 다시 시도해 주세요.", "Could not open the Magic wallet. Please try again shortly."],
+  OTP: ["이메일 인증을 완료하지 못했습니다. 다시 시도해 주세요.", "Could not complete email verification. Please try again."],
+  ACCOUNT: ["Magic 지갑 주소를 확인하지 못했습니다. 다시 로그인해 주세요.", "Could not confirm the Magic wallet address. Please sign in again."],
+  CHAIN: ["Magic 지갑이 Sepolia에 연결되지 않았습니다. 네트워크 설정을 확인해 주세요.", "The Magic wallet is not on Sepolia. Check the network configuration."],
+  LOGOUT: ["이전 지갑 로그아웃을 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.", "Could not confirm the previous wallet sign-out. Reload before trying again."],
+};
 
-export function WalletConnectDialog({ open, onClose }: { open: boolean; onClose(): void }) {
+export function WalletConnectDialog({ open, onClose, onLoginStarted }: { open: boolean; onClose(): void; onLoginStarted?(): void }) {
   const { locale, t } = useLocale();
+  const { wallets, connection, busy, notice, connect, discover, magic, connectMagic, cancelMagic } = useWallet();
   const dialog = useRef<HTMLDialogElement>(null);
   const closing = useRef(false);
-  const intent = useRef(0);
-  const { wallets, connection, busy, notice, connect, discover } = useWallet();
-  const { connectors, connectAsync } = useConnect();
-  const [choice, setChoice] = useState<Choice | null>(null);
+  const [choice, setChoice] = useState<Choice>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
-  const [sdkBusy, setSdkBusy] = useState(false);
-  const [error, setError] = useState<DialogError>("");
+  const [email, setEmail] = useState("");
+  const [localError, setLocalError] = useState<"missing" | "copy" | null>(null);
   const [copied, setCopied] = useState(false);
+  const metaMask = wallets.find(wallet => /meta\s?mask/i.test(wallet.name) || (wallet.id === "injected-fallback" && (wallet.provider as { isMetaMask?: boolean }).isMetaMask === true));
+
   function closeDialog() {
     if (closing.current) return;
     closing.current = true;
-    intent.current++;
-    setChoice(null); setDevice("desktop"); setError(""); setCopied(false);
+    if (magic.pending) cancelMagic();
+    setChoice(null); setDevice("desktop"); setEmail(""); setLocalError(null); setCopied(false);
     if (dialog.current?.open) dialog.current.close();
     onClose();
   }
   useEffect(() => {
     if (open && !dialog.current?.open) { closing.current = false; dialog.current?.showModal(); }
-    if (!open && dialog.current?.open) dialog.current.close();
+    if (!open && dialog.current?.open) { closing.current = true; dialog.current.close(); }
   }, [open]);
-  useEffect(() => { if (open && connection) onClose(); }, [open, connection, onClose]);
-  const matching = (id: Choice): WalletOption | undefined => {
-    const standard = providers.find(p => p.id === id);
-    return standard?.match ? wallets.find(w => standard.match?.test(w.name)) : wallets.find(w => w.id === id);
-  };
-  const named = choice ? providers.find(p => p.id === choice) : undefined;
-  const wallet = choice ? matching(choice) : undefined;
-  const walletName = (name: string) => locale === "en" && name === "브라우저 지갑" ? "Browser wallet" : name;
-  const title = named?.name ?? (wallet ? walletName(wallet.name) : t("지갑", "Wallet"));
-  const errorMessages: Record<Exclude<DialogError, "">, [string, string]> = {
-    walletconnect: ["현재 WalletConnect 연결이 준비되지 않았습니다. 지갑 앱의 브라우저에서 Floww를 열어 주세요.", "WalletConnect is not ready. Open Floww in your wallet app browser."],
-    missing: ["이 브라우저에서 해당 지갑을 찾지 못했습니다. 지갑을 설치하거나 지갑 앱의 브라우저에서 열어 주세요.", "This wallet was not found in your browser. Install it or open Floww in your wallet app browser."],
-    copy: ["주소를 복사할 수 없습니다. 브라우저 주소를 직접 확인해 주세요.", "Could not copy the address. Check the browser address directly."],
-    rejected: ["지갑 연결을 거절했습니다. 원할 때 다시 연결할 수 있습니다.", "Wallet connection rejected. You can connect again whenever you choose."],
-    pending: ["지갑에 대기 중인 요청이 있습니다. 지갑 화면을 확인해 주세요.", "A request is pending in your wallet. Check your wallet screen."],
-    disconnected: ["지갑 또는 네트워크 연결이 끊겼습니다.", "Wallet or network connection lost."],
-    unknown: ["지갑 연결을 확인하지 못했습니다. 지갑 상태를 확인하고 다시 시도해 주세요.", "Could not confirm the wallet connection. Check your wallet and try again."],
-  };
-  const errorMessage = error ? t(errorMessages[error][0], errorMessages[error][1]) : "";
-  const sdkConnector = connectors.find(c => c.id === "walletConnect");
-  async function requestConnection() {
-    if (!choice || busy || sdkBusy) return;
-    const request = ++intent.current;
-    setError("");
-    if (choice === "walletconnect") {
-      if (!projectId || !sdkConnector) { setError("walletconnect"); return; }
-      setSdkBusy(true);
-      try { await connectAsync({ connector: sdkConnector }); }
-      catch (cause) { if (request === intent.current) { const code = (cause as { code?: unknown } | null)?.code; setError(code === 4001 ? "rejected" : code === -32002 ? "pending" : code === 4900 || code === 4901 ? "disconnected" : "unknown"); } }
-      finally { setSdkBusy(false); }
-      return;
+  useEffect(() => {
+    if (open && connection) {
+      closing.current = true;
+      onClose();
     }
-    if (!wallet) { setError("missing"); return; }
-    await connect(wallet);
+  }, [open, connection, onClose]);
+  function choose(next: Choice) {
+    if (choice === "magic" && magic.pending) cancelMagic();
+    setChoice(next); setLocalError(null);
   }
   async function copyCurrentUrl() {
     try { await navigator.clipboard.writeText(location.href); setCopied(true); }
-    catch { setError("copy"); }
+    catch { setLocalError("copy"); }
   }
-  return <dialog ref={dialog} className={styles.dialog} aria-labelledby="wallet-dialog-title" onCancel={event => { event.preventDefault(); closeDialog(); }} onClose={() => { if (!closing.current) closeDialog(); }}>
+  const localMessage = localError === "missing" ? t("이 브라우저에서 MetaMask를 찾지 못했습니다. 확장 프로그램을 설치하거나 MetaMask 앱의 브라우저에서 열어 주세요.", "MetaMask was not found in this browser. Install the extension or open Floww in the MetaMask app browser.")
+    : localError === "copy" ? t("주소를 복사할 수 없습니다. 브라우저 주소를 직접 확인해 주세요.", "Could not copy the address. Check the browser address directly.") : "";
+  const magicMessage = magic.error ? t(magicMessages[magic.error][0], magicMessages[magic.error][1]) : "";
+
+  return <dialog ref={dialog} className={styles.dialog} aria-labelledby="wallet-dialog-title" onCancel={event => { event.preventDefault(); closeDialog(); }} onClose={() => {
+    setChoice(null); setDevice("desktop"); setEmail(""); setLocalError(null); setCopied(false);
+    if (!closing.current) closeDialog();
+  }}>
     <div className={styles.dialogTop}>
-      <button type="button" className={styles.back} onClick={() => choice ? (intent.current++, setChoice(null), setError("")) : closeDialog()}>{choice ? t("← 지갑 목록", "← Wallet list") : t("닫기", "Close")}</button>
+      <button type="button" className={styles.back} onClick={() => choice ? choose(null) : closeDialog()}>{choice ? t("← 로그인 방법", "← Sign-in methods") : t("닫기", "Close")}</button>
       <button type="button" className={styles.close} aria-label={t("닫기", "Close")} onClick={closeDialog}>×</button>
     </div>
     {!choice ? <>
-      <p className={styles.kicker}>{t("FLOWW · 지갑", "FLOWW · WALLET")}</p><h2 id="wallet-dialog-title">{t("지갑을 선택하세요", "Choose a wallet")}</h2>
-      <p className={styles.description}>{t("연결할 지갑을 고르세요. 로그인 서명은 연결 후 직접 요청합니다.", "Choose a wallet to connect. You request the sign-in signature separately after connecting.")}</p>
+      <p className={styles.kicker}>{t("FLOWW · 지갑 로그인", "FLOWW · WALLET SIGN-IN")}</p><h2 id="wallet-dialog-title">{t("로그인 방법을 선택하세요", "Choose how to sign in")}</h2>
+      <p className={styles.description}>{t("두 방법 모두 지갑 주소로 서버 로그인을 완료합니다. 로그인만으로 구매가 승인되지 않습니다.", "Both methods sign in to the server with a wallet address. Sign-in alone does not approve a purchase.")}</p>
       <div className={styles.providerList}>
-        {providers.map(provider => <button type="button" className={styles.provider} key={provider.id} onClick={() => { setChoice(provider.id); setError(""); }}>
-          <span className={styles.providerMark} aria-hidden="true">{provider.id === "metamask" ? "M" : provider.id === "coinbase" ? "C" : "W"}</span>
-          <span><strong>{provider.name}</strong><small>{provider.id === "walletconnect" ? projectId ? t("모바일 지갑 연결", "Mobile wallet connection") : t("현재 연결 설정 없음", "Connection unavailable") : matching(provider.id) ? t("이 브라우저에서 감지됨", "Detected in this browser") : t("설치 여부 확인", "Check installation")}</small></span><span aria-hidden="true">↗</span>
-        </button>)}
-        {wallets.filter(w => !providers.some(p => p.match?.test(w.name))).map(w => <button type="button" className={styles.provider} key={w.id} onClick={() => { setChoice(w.id); setError(""); }}><span className={styles.providerMark} aria-hidden="true">◈</span><span><strong>{walletName(w.name)}</strong><small>{t("이 브라우저에서 감지됨", "Detected in this browser")}</small></span><span aria-hidden="true">↗</span></button>)}
+        <button type="button" className={styles.provider} onClick={() => choose("metamask")}><span className={styles.providerMark} aria-hidden="true">M</span><span><strong>MetaMask</strong><small>{metaMask ? t("이 브라우저에서 감지됨", "Detected in this browser") : t("확장 프로그램 또는 앱 내 브라우저 필요", "Extension or in-app browser needed")}</small></span><span aria-hidden="true">↗</span></button>
+        <button type="button" className={styles.provider} onClick={() => choose("magic")}><span className={styles.providerMark} aria-hidden="true">✉</span><span><strong>Magic</strong><small>{magic.configured ? t("이메일 인증으로 지갑 열기", "Open a wallet with email verification") : t("현재 로그인 설정 없음", "Sign-in is not configured")}</small></span><span aria-hidden="true">↗</span></button>
       </div>
-      <button type="button" className={styles.textButton} onClick={discover}>{t("지갑 다시 찾기", "Search for wallets again")}</button>
-    </> : <>
-      <p className={styles.kicker}>{t("FLOWW · 지갑", "FLOWW · WALLET")}</p><h2 id="wallet-dialog-title">{title} {t("연결", "connection")}</h2>
+    </> : choice === "metamask" ? <>
+      <p className={styles.kicker}>MetaMask</p><h2 id="wallet-dialog-title">{t("MetaMask 연결", "Connect MetaMask")}</h2>
       <div className={styles.tabs} role="tablist" aria-label={t("연결할 기기", "Connection device")}><button type="button" role="tab" aria-selected={device === "desktop"} onClick={() => setDevice("desktop")}>{t("데스크톱", "Desktop")}</button><button type="button" role="tab" aria-selected={device === "mobile"} onClick={() => setDevice("mobile")}>{t("모바일", "Mobile")}</button></div>
-      {choice === "walletconnect" ? projectId ? <><p className={styles.description}>{t("연결을 누르면 WalletConnect가 실제 지갑 연결 화면을 엽니다. 연결 전에는 QR을 표시하지 않습니다.", "Connect opens the actual WalletConnect screen. A QR code is not shown before connecting.")}</p><button type="button" className="button primary" disabled={sdkBusy} onClick={() => void requestConnection()}>{sdkBusy ? t("지갑 연결 대기 중", "Waiting for wallet") : t("WalletConnect 열기", "Open WalletConnect")}</button></> : <p className={styles.description}>{t("현재 WalletConnect 연결 설정이 없어 QR 페어링을 제공할 수 없습니다. 설치된 브라우저 지갑을 선택하거나 모바일 지갑 앱의 브라우저에서 이 페이지를 열어 주세요.", "WalletConnect QR pairing is unavailable because it is not configured. Choose an installed browser wallet or open this page in a mobile wallet app browser.")}</p>
-        : device === "desktop" ? <><p className={styles.description}>{wallet ? `${walletName(wallet.name)} ${t("지갑이 감지되었습니다. 연결 요청을 지갑에서 확인해 주세요.", "wallet detected. Confirm the connection request in your wallet.")}` : `${title} ${t("지갑이 감지되지 않았습니다. 설치 후 다시 찾거나 모바일 지갑 앱에서 열어 주세요.", "wallet was not detected. Install it and search again, or open the page in a mobile wallet app.")}`}</p>{wallet && <button type="button" className="button primary" disabled={busy} onClick={() => void requestConnection()}>{busy ? t("지갑 응답 대기 중", "Waiting for wallet response") : `${walletName(wallet.name)} ${t("연결", "Connect")}`}</button>}</>
-        : <><p className={styles.description}>{t("휴대폰의", "Open the Floww address in the")} {title} {t("앱 내 브라우저에서 Floww 주소를 열면 해당 앱의 지갑으로 연결할 수 있습니다. 이 브라우저에서 지갑이 감지된 경우 여기서 연결할 수도 있습니다.", "app browser on your phone to connect its wallet. If this browser detects the wallet, you can connect here too.") }</p><button type="button" className="button secondary" onClick={() => void copyCurrentUrl()}>{copied ? t("주소 복사됨", "Address copied") : t("이 페이지 주소 복사", "Copy page address")}</button>{wallet && <button type="button" className="button primary" disabled={busy} onClick={() => void requestConnection()}>{busy ? t("지갑 응답 대기 중", "Waiting for wallet response") : `${walletName(wallet.name)} ${t("연결", "Connect")}`}</button>}</>}
-      {!wallet && choice !== "walletconnect" && <button type="button" className={styles.textButton} onClick={discover}>{t("지갑 다시 찾기", "Search for wallets again")}</button>}
-      {(error || notice) && <p role={error ? "alert" : "status"} className={styles.notice}>{errorMessage || translateWalletNotice(notice, locale)}</p>}
-      <p className={styles.boundary}>{t("지갑 연결만으로 로그인이나 구매 승인이 완료되지 않습니다.", "Connecting a wallet does not complete sign-in or purchase approval.")}</p>
+      {device === "desktop" ? <p className={styles.description}>{metaMask ? t("MetaMask가 감지되었습니다. 연결 요청을 지갑에서 확인해 주세요.", "MetaMask was detected. Confirm the connection request in your wallet.") : t("MetaMask가 감지되지 않았습니다. 확장 프로그램을 설치한 뒤 다시 찾거나 모바일 앱에서 열어 주세요.", "MetaMask was not detected. Install its extension and search again, or open Floww in its mobile app.")}</p>
+        : <p className={styles.description}>{t("휴대폰의 MetaMask 앱 내 브라우저에서 Floww를 열어 주세요. 연결 가능한 MetaMask가 감지되면 이 화면에서 연결할 수 있습니다.", "Open Floww in the MetaMask app browser on your phone. If MetaMask is detected here, you can connect from this screen.")}</p>}
+      {device === "mobile" && <button type="button" className="button secondary" onClick={() => void copyCurrentUrl()}>{copied ? t("주소 복사됨", "Address copied") : t("이 페이지 주소 복사", "Copy page address")}</button>}
+      {metaMask ? <button type="button" className="button primary" disabled={busy} onClick={() => void connect(metaMask)}>{busy ? t("지갑 응답 대기 중", "Waiting for wallet response") : t("MetaMask 연결", "Connect MetaMask")}</button>
+        : <button type="button" className={styles.textButton} onClick={() => { discover(); setLocalError("missing"); }}>{t("MetaMask 다시 찾기", "Search for MetaMask again")}</button>}
+      {(localMessage || notice) && <p role={localMessage ? "alert" : "status"} className={styles.notice}>{localMessage || translateWalletNotice(notice, locale)}</p>}
+    </> : <>
+      <p className={styles.kicker}>Magic</p><h2 id="wallet-dialog-title">{t("이메일로 지갑 로그인", "Sign in with email wallet")}</h2>
+      <p className={styles.description}>{t("Magic에서 이메일 인증 코드를 보냅니다. 인증 후 Sepolia 지갑으로 Floww 로그인 메시지에 서명합니다.", "Magic sends an email verification code. After verification, its Sepolia wallet signs the Floww sign-in message.")}</p>
+      <form onSubmit={event => { event.preventDefault(); if (!magic.configured || magic.pending) return; onLoginStarted?.(); void connectMagic(email.trim(), locale); }}>
+        <label className={styles.emailLabel} htmlFor="magic-email">{t("이메일 주소", "Email address")}</label>
+        <input id="magic-email" className={styles.emailInput} type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} maxLength={254} required disabled={magic.pending || !magic.configured} />
+        <button className="button primary" type="submit" disabled={magic.pending || !magic.configured}>{magic.pending ? t("이메일 인증 및 로그인 진행 중", "Email verification and sign-in in progress") : t("이메일로 계속", "Continue with email")}</button>
+      </form>
+      {!magic.configured && <p role="status" className={styles.notice}>{t("Magic 로그인이 아직 설정되지 않았습니다. MetaMask를 선택하거나 나중에 다시 시도해 주세요.", "Magic sign-in is not configured yet. Choose MetaMask or try again later.")}</p>}
+      {magic.pending && <><p role="status" className={styles.notice}>{t("Magic의 인증 화면에서 이메일 코드를 입력해 주세요. 로그인 서명은 구매 승인이 아닙니다.", "Enter the email code in Magic's verification screen. The sign-in signature is not purchase approval.")}</p><button type="button" className={styles.textButton} onClick={cancelMagic}>{t("인증 취소", "Cancel verification")}</button></>}
+      {magicMessage && <p role="alert" className={styles.notice}>{magicMessage}</p>}
+      {magic.error === "PENDING" || magic.error === "LOGOUT" ? <button type="button" className={styles.textButton} onClick={() => location.reload()}>{t("새로고침", "Reload page")}</button> : null}
     </>}
+    <p className={styles.boundary}>{t("지갑 연결과 로그인은 구매 또는 지출 승인이 아닙니다.", "Wallet connection and sign-in do not approve a purchase or spending.")}</p>
   </dialog>;
 }

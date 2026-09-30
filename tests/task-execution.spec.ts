@@ -38,7 +38,7 @@ test("shared ReviewSnapshotV1 golden vector and every authorization boundary", a
 
 async function setup(page:Page, mode: "normal"|"deny"|"stop"|"reject"="normal") {
   const w=Wallet.createRandom(), {task,a}=fixture(w.address), sends: Record<string,string>[]=[];const posts:string[]=[];
-  let fundingBalance="0", waitSign: (()=>void)|undefined;
+  let fundingBalance="0", waitSign: (()=>void)|undefined, accountPrepared=false;
   await page.exposeFunction("fixtureRpc",async(method:string,params:unknown[])=>{
     if(["eth_accounts","eth_requestAccounts"].includes(method))return[w.address];
     if(method==="eth_chainId")return"0xaa36a7";
@@ -55,7 +55,7 @@ async function setup(page:Page, mode: "normal"|"deny"|"stop"|"reject"="normal") 
   });
   await page.addInitScript(()=>{
     const provider={request:async({method,params=[]}:{method:string;params?:unknown[]})=>{const result=await(window as unknown as {fixtureRpc:(m:string,p:unknown[])=>Promise<unknown>}).fixtureRpc(method,params);if(result && typeof result==="object" && "rejected" in result)throw{code:4001};return result;},on:()=>{},removeListener:()=>{}};
-    window.addEventListener("eip6963:requestProvider",()=>window.dispatchEvent(new CustomEvent("eip6963:announceProvider",{detail:{info:{uuid:"execution-fixture",name:"Execution Fixture"},provider}})));
+    window.addEventListener("eip6963:requestProvider",()=>window.dispatchEvent(new CustomEvent("eip6963:announceProvider",{detail:{info:{uuid:"execution-fixture",name:"MetaMask"},provider}})));
   });
   await page.route("**/api/wallet-auth/*",r=>r.fulfill({json:r.request().url().endsWith("config")?{enabled:true,mode:"team-jwt",businessReady:true}:{identity:{namespace:"eip155",address:w.address},chainId:"11155111",expiresAt:new Date(Date.now()+3600000).toISOString()}}));
   if(mode==="deny")task.attempts[0].policy={decision:"DENY",reasonCode:"RECIPIENT_NOT_ALLOWED",message:null};
@@ -69,6 +69,8 @@ async function setup(page:Page, mode: "normal"|"deny"|"stop"|"reject"="normal") 
     if(path.endsWith("/mandate/reject")||path.endsWith("/cancel")){task.status="CANCELLED";return r.fulfill({json:task});}
     if(path.endsWith("/orders")){task.attempts[0].order={orderId:taskId,status:"CREATED",paymentStatus:"PENDING"};task.status="EXECUTING";return r.fulfill({json:task.attempts[0].order});}
     if(path.includes("/account")){
+      if(path.endsWith("/account") && r.request().method()==="GET" && !accountPrepared)return r.fulfill({status:409,json:{reasonCode:"CHAIN_NOT_READY"}});
+      if(path.endsWith("/prepare"))accountPrepared=true;
       if(path.endsWith("/bind")){a.state="BOUND";a.accountAddress=addr("6");a.deployTxHash=hash("1");}
       if(path.endsWith("/approval-request"))return r.fulfill({json:approval(a)});
       if(path.endsWith("/signature")){checkSignature(a,approval(a),r.request().postDataJSON().signature);a.state="SIGNED";task.status="ACTIVE";}
@@ -87,8 +89,8 @@ async function setup(page:Page, mode: "normal"|"deny"|"stop"|"reject"="normal") 
   });
   await page.goto("/login");
   await page.getByRole("button",{name:"지갑 선택",exact:true}).click();
-  await page.getByRole("button",{name:/Execution Fixture.*이 브라우저에서 감지됨/}).click();
-  await page.getByRole("button",{name:"Execution Fixture 연결",exact:true}).click();
+  await page.getByRole("button",{name:/MetaMask.*이 브라우저에서 감지됨/}).click();
+  await page.getByRole("button",{name:"MetaMask 연결",exact:true}).click();
   await page.getByRole("link",{name:"내 작업",exact:true}).click();
   await page.getByText("내 작업 다시 열기",{exact:true}).click();
   await page.getByRole("button",{name:"내 작업 조회",exact:true}).click();

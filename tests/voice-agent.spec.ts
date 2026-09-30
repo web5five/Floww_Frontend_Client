@@ -19,7 +19,7 @@ test("chat microphone requires a click, recovers denial, retains task and releas
     const state = { requests: 0, stops: 0, peersClosed: 0, enabled: true, track: null as EventTarget | null, channel: null as null | { onmessage?: (event: { data: string }) => void }, emit: (event: unknown) => state.channel?.onmessage?.({ data: JSON.stringify(event) }), endTrack: () => state.track?.dispatchEvent(new Event("ended")), changeAccount: () => listeners.get("accountsChanged")?.() };
     Object.assign(window, { voiceFixture: state });
     const provider = { request: async ({ method }: { method: string }) => method === "eth_chainId" ? "0xaa36a7" : [owner], on(event: string, listener: () => void) { listeners.set(event, listener); }, removeListener(event: string) { listeners.delete(event); } };
-    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "voice-fixture", name: "Voice Fixture" }, provider } })));
+    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "voice-fixture", name: "MetaMask" }, provider } })));
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", { value: async () => {
       if (++state.requests === 1) throw new DOMException("Denied", "NotAllowedError");
       state.enabled = true;
@@ -44,8 +44,8 @@ test("chat microphone requires a click, recovers denial, retains task and releas
   }, { owner });
   await page.goto("/login");
   await page.getByRole("button", { name: "지갑 선택", exact: true }).click();
-  await page.getByRole("button", { name: /Voice Fixture.*감지됨/ }).click();
-  await page.getByRole("button", { name: "Voice Fixture 연결", exact: true }).click();
+  await page.getByRole("button", { name: /MetaMask.*감지됨/ }).click();
+  await page.getByRole("button", { name: "MetaMask 연결", exact: true }).click();
   await page.getByRole("link", { name: "내 작업", exact: true }).click();
   await page.getByText("내 작업 다시 열기", { exact: true }).click();
   await page.getByRole("button", { name: "내 작업 조회", exact: true }).click();
@@ -127,7 +127,7 @@ test("auth expiry during pending microphone permission stops a late stream witho
     const fixture = { requests: 0, stops: 0, resolveMic: null as null | (() => void) };
     Object.assign(window, { expiryVoiceFixture: fixture });
     const provider = { request: async ({ method }: { method: string }) => method === "eth_chainId" ? "0xaa36a7" : [owner], on() {}, removeListener() {} };
-    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "expiry-fixture", name: "Expiry Fixture" }, provider } })));
+    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "expiry-fixture", name: "MetaMask" }, provider } })));
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", { value: () => {
       fixture.requests++;
       return new Promise(resolve => { fixture.resolveMic = () => resolve({ getTracks: () => [{ stop: () => fixture.stops++ }] }); });
@@ -136,8 +136,8 @@ test("auth expiry during pending microphone permission stops a late stream witho
   }, { owner });
   await page.goto("/login");
   await page.getByRole("button", { name: "지갑 선택", exact: true }).click();
-  await page.getByRole("button", { name: /Expiry Fixture.*감지됨/ }).click();
-  await page.getByRole("button", { name: "Expiry Fixture 연결", exact: true }).click();
+  await page.getByRole("button", { name: /MetaMask.*감지됨/ }).click();
+  await page.getByRole("button", { name: "MetaMask 연결", exact: true }).click();
   await page.getByRole("link", { name: "내 작업", exact: true }).click();
   await page.getByText("내 작업 다시 열기", { exact: true }).click();
   await page.getByRole("button", { name: "내 작업 조회", exact: true }).click();
@@ -167,7 +167,7 @@ test("English voice screen uses the selected language and keeps scenario confirm
   await page.route("**/api/voice/session?*", route => { voiceRequests.push(route.request().url()); return route.fulfill({ contentType: "application/sdp", body: "v=0\r\n" }); });
   await page.addInitScript(({ owner }) => {
     const provider = { request: async ({ method }: { method: string }) => method === "eth_chainId" ? "0xaa36a7" : [owner], on() {}, removeListener() {} };
-    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "english-voice-fixture", name: "Voice Fixture" }, provider } })));
+    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "english-voice-fixture", name: "MetaMask" }, provider } })));
     const state = { stops: 0, peersClosed: 0, emit: (event: unknown) => channel?.onmessage({ data: JSON.stringify(event) }) };
     const track = new EventTarget() as EventTarget & { enabled: boolean; stop(): void };
     track.enabled = true; track.stop = () => { state.stops++; };
@@ -187,8 +187,8 @@ test("English voice screen uses the selected language and keeps scenario confirm
   }, { owner });
   await page.goto("/login");
   await page.getByRole("button", { name: /^(지갑 선택|Choose wallet)$/ }).click();
-  await page.getByRole("button", { name: /Voice Fixture.*(감지됨|Detected)/ }).click();
-  await page.getByRole("button", { name: /Voice Fixture (연결|Connect)/ }).click();
+  await page.getByRole("button", { name: /MetaMask.*(감지됨|Detected)/ }).click();
+  await page.getByRole("button", { name: "Connect MetaMask" }).click();
   await page.locator('a[href="/dashboard"]').first().click();
   await page.getByText(/^(내 작업 다시 열기|Reopen my Tasks)$/).click();
   await page.getByRole("button", { name: /^(내 작업 조회|View my Tasks)$/ }).click();
