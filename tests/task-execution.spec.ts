@@ -55,7 +55,7 @@ async function setup(page:Page, mode: "normal"|"deny"|"stop"|"reject"="normal") 
   });
   await page.addInitScript(()=>{
     const provider={request:async({method,params=[]}:{method:string;params?:unknown[]})=>{const result=await(window as unknown as {fixtureRpc:(m:string,p:unknown[])=>Promise<unknown>}).fixtureRpc(method,params);if(result && typeof result==="object" && "rejected" in result)throw{code:4001};return result;},on:()=>{},removeListener:()=>{}};
-    window.addEventListener("eip6963:requestProvider",()=>window.dispatchEvent(new CustomEvent("eip6963:announceProvider",{detail:{info:{uuid:"execution-fixture",name:"Execution Fixture"},provider}})));
+    window.addEventListener("eip6963:requestProvider",()=>window.dispatchEvent(new CustomEvent("eip6963:announceProvider",{detail:{info:{uuid:"execution-fixture",name:"MetaMask"},provider}})));
   });
   await page.route("**/api/wallet-auth/*",r=>r.fulfill({json:r.request().url().endsWith("config")?{enabled:true,mode:"team-jwt",businessReady:true}:{identity:{namespace:"eip155",address:w.address},chainId:"11155111",expiresAt:new Date(Date.now()+3600000).toISOString()}}));
   if(mode==="deny")task.attempts[0].policy={decision:"DENY",reasonCode:"RECIPIENT_NOT_ALLOWED",message:null};
@@ -87,8 +87,8 @@ async function setup(page:Page, mode: "normal"|"deny"|"stop"|"reject"="normal") 
   });
   await page.goto("/login");
   await page.getByRole("button",{name:"지갑 선택",exact:true}).click();
-  await page.getByRole("button",{name:/Execution Fixture.*이 브라우저에서 감지됨/}).click();
-  await page.getByRole("button",{name:"Execution Fixture 연결",exact:true}).click();
+  await page.getByRole("button",{name:/MetaMask.*이 브라우저에서 감지됨/}).click();
+  await page.getByRole("button",{name:"MetaMask 연결",exact:true}).click();
   await page.getByRole("link",{name:"내 작업",exact:true}).click();
   await page.getByText("내 작업 다시 열기",{exact:true}).click();
   await page.getByRole("button",{name:"내 작업 조회",exact:true}).click();

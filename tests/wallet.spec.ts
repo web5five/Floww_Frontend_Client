@@ -107,3 +107,25 @@ test("English Magic configuration gate stays usable on a narrow screen", async (
   await expect(page.getByRole("dialog")).not.toContainText(/[가-힣]/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+test("Korean and English wallet choices stay readable with Magic unconfigured", async ({ page, isMobile }) => {
+  for (const width of isMobile ? [390, 320] : [1440]) {
+    await page.setViewportSize({ width, height: isMobile ? 844 : 1000 });
+    for (const locale of ["ko", "en"] as const) {
+      await page.goto("/login");
+      const current = await page.locator("html").getAttribute("lang");
+      if (current !== locale) await page.getByRole("button", { name: locale === "en" ? "영어로 변경" : "Switch to Korean" }).click();
+      await expect(page.locator("html")).toHaveAttribute("lang", locale);
+      await expect(page.getByRole("banner").getByRole("button", { name: locale === "en" ? "Connect wallet" : "지갑 연결" })).toBeVisible();
+      await page.getByRole("button", { name: locale === "en" ? "Choose wallet" : "지갑 선택" }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog.getByRole("heading", { name: locale === "en" ? "Choose how to sign in" : "로그인 방법을 선택하세요" })).toBeVisible();
+      await page.screenshot({ path: `artifacts/f037-wallet-choices-${locale}-${width}.png`, fullPage: true });
+      await dialog.getByRole("button", { name: locale === "en" ? /Magic.*Sign-in is not configured/ : /Magic.*현재 로그인 설정 없음/ }).click();
+      await expect(dialog.getByRole("button", { name: locale === "en" ? "Continue with email" : "이메일로 계속" })).toBeDisabled();
+      if (locale === "en") expect(await dialog.innerText()).not.toMatch(/[가-힣]/);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${locale} at ${width}px`).toBe(true);
+      await page.screenshot({ path: `artifacts/f037-wallet-magic-unconfigured-${locale}-${width}.png`, fullPage: true });
+    }
+  }
+});

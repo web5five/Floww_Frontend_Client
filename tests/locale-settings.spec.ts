@@ -68,7 +68,7 @@ test("locale change retranslates a pending wallet error and preserves the wallet
   await expect(page.getByRole("dialog").getByRole("alert")).toContainText("Could not copy the address.");
   await page.getByRole("tab", { name: "Desktop" }).click();
   await page.getByRole("button", { name: "Connect MetaMask" }).click();
-  await expect(page.getByRole("dialog").getByRole("status")).toContainText("Wallet connection rejected.");
+  await expect(page.getByRole("region", { name: "Wallet sign-in" }).getByRole("status")).toContainText("Wallet connection rejected.");
   await page.getByRole("button", { name: "Connect MetaMask" }).click();
   await expect(page.getByText("MetaMask connected", { exact: true })).toBeVisible();
   await expect(page).toHaveTitle(/Floww — Buy with clarity/);
