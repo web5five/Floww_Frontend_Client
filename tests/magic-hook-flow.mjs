@@ -181,7 +181,7 @@ async function fixture() {
     tree = renderDialog();
     nodes(tree, node => node.type === "form")[0].props.onSubmit({ preventDefault() {} });
   }
-  async function signIn() {
+  async function beginLogin() {
     renderProvider();
     await until(() => renderProvider().auth.initialized);
     assert.equal(renderProvider().auth.enabled, true);
@@ -191,12 +191,15 @@ async function fixture() {
     assert.equal(closed, true, "connected dialog closes before challenge finishes");
     renderDialog();
     assert.equal(events.includes("bff:logout"), false, "automatic close must not cancel login");
+  }
+  async function signIn() {
+    await beginLogin();
     releaseNonce();
     await until(() => renderProvider().auth.session);
     assert.deepEqual(renderProvider().auth.session, session);
   }
   return {
-    events, cookies, session, message, renderProvider, signIn, isClosed: () => closed,
+    events, cookies, session, message, renderProvider, beginLogin, signIn, releaseChallenge: releaseNonce, isClosed: () => closed,
     hold(method) { heldMethod = method; },
     release(value) { heldMethod = ""; assert.ok(releaseGuard); releaseGuard(value); releaseGuard = null; },
     expire() { const now = Date.now; Date.now = () => Date.parse(sessionExpiresAt) + 1; try { browserWindow.dispatchEvent(new Event("focus")); } finally { Date.now = now; } },
@@ -219,6 +222,21 @@ test("actual auth hook composes Magic OTP provider, exact SIWE, BFF session and 
     assert.deepEqual(await adapter.walletAuthAdapter.getSession(), flow.session);
     assert.equal(flow.cookies.has("floww_wallet_session"), true);
     assert.equal(flow.renderProvider().auth.isCurrent(flow.renderProvider().auth.snapshot()), true);
+  } finally { await flow.close(); }
+});
+
+test("actual auth hook and provider cancel a pending post-OTP challenge without signing", async () => {
+  const flow = await fixture();
+  try {
+    await flow.beginLogin();
+    flow.renderProvider().cancelMagic();
+    flow.releaseChallenge();
+    await until(() => flow.events.includes("bff:logout") && flow.events.includes("magic-logout"));
+    assert.equal(flow.renderProvider().connection, null);
+    assert.equal(flow.renderProvider().auth.session, null);
+    assert.equal(flow.events.includes("personal_sign"), false);
+    assert.equal(flow.events.includes("bff:verify"), false);
+    assert.equal(flow.cookies.has("floww_wallet_session"), false);
   } finally { await flow.close(); }
 });
 
