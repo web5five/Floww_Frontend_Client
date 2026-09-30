@@ -12,6 +12,7 @@ import { useLocale } from "@/lib/i18n";
 import { TaskExecution } from "./task-execution";
 import { AccountEvidence } from "./account-evidence";
 import { VoiceAgentLauncher } from "./voice-agent";
+import styles from "./scenario-experience.module.css";
 
 type Draft = { goal: string; budget: string; deadline: string };
 type Intent = { key: string; input: TaskInput; taskId: string | null; requested: boolean };
@@ -359,22 +360,22 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
       </section>
       {(chat || step === "result") && task && <section className="card scenario-panel"><div className="section-heading"><h2>{chat ? t("이 작업의 대화", "Conversation for this Task") : t("진행 알림", "Progress updates")}</h2><span className="tag">{t('같은 작업 기록', 'Same Task record')}</span></div><ol className={chat ? "chat-messages" : "journey-messages"}>{messages.map(message => <li key={message.id} className={message.role}><strong>{message.title}</strong><p>{message.body}</p>{message.at && <time dateTime={message.at}>{new Date(message.at).toLocaleString(dateLocale)}</time>}</li>)}</ol>{!events.length && <p>{t('서버 이벤트를 아직 받지 못했습니다. 작업 상태를 다시 확인할 수 있습니다.', 'No server events have been received yet. You can refresh Task status.')}</p>}</section>}
       {chat && task && <section className="chat-voice-entry" aria-label={t("작업 대화 입력", "Task conversation input")}>
-        <form className="chat-language-form" onSubmit={event => {
+        <form className={styles.languageForm} onSubmit={event => {
           event.preventDefault();
           const next = languageCommand(chatInput);
           setChatInput("");
           if (next) { setChatFeedback("language"); setLocale(next); }
           else setChatFeedback("unsupported");
         }}>
-          <label className="field">{t("화면 언어 요청", "Display language request")}
+          <label className={`field ${styles.languageField}`}>{t("화면 언어 요청", "Display language request")}
             <input value={chatInput} maxLength={120} onChange={event => setChatInput(event.target.value)} placeholder={t("예: 영어로 보여줘", "e.g. English please")} autoComplete="off" />
           </label>
-          <button className="button secondary" type="submit" disabled={!chatInput.trim()}>{t("요청 보내기", "Send request")}</button>
+          <button className={`button secondary ${styles.sendButton}`} type="submit" disabled={!chatInput.trim()}>{t("요청 보내기", "Send request")}</button>
         </form>
-        {chatFeedback && <p role="status">{chatFeedback === "language"
+        {chatFeedback && <p className={styles.feedback} role="status">{chatFeedback === "language"
           ? t("화면 언어를 한국어로 설정했습니다. 같은 작업을 계속 보고 있습니다.", "Display language set to English. You are viewing the same Task.")
-          : t("이 입력은 화면 언어만 변경하며 AI에 요청을 보내지 않습니다. 예: 영어로 보여줘. 구매 진행은 위 작업 기록을 확인하세요.", "This input changes display language only and does not send a request to AI. Try: English please. Review the Task record above for purchase progress.")}</p>}
-        <VoiceAgentLauncher key={`${owner}:${task.taskId}:${stopped}`} taskId={task.taskId} onScenarioRequest={!stopped && !busy ? voiceScenario : undefined} /><p>{t('마이크를 눌러 이 작업에 대해 이야기하세요.', 'Press the microphone to talk about this Task.')}</p><Link className="text-link" href={`/voice?taskId=${encodeURIComponent(task.taskId)}`}>{t('음성 화면 크게 열기 ↗', 'Open full voice view ↗')}</Link></section>}
+          : t("화면 언어는 ‘영어로 보여줘’ 또는 ‘한국어로 바꿔줘’로 요청할 수 있어요. 작업에 대해 이야기하려면 마이크를 눌러주세요.", "To change the display language, ask ‘English please’ or ‘Korean please’. To talk about this Task, use the microphone.")}</p>}
+        <div className={styles.voiceTools}><VoiceAgentLauncher key={`${owner}:${task.taskId}:${stopped}`} taskId={task.taskId} onScenarioRequest={!stopped && !busy ? voiceScenario : undefined} /><p>{t('마이크를 눌러 이 작업에 대해 이야기하세요.', 'Press the microphone to talk about this Task.')}</p><Link className="text-link" href={`/voice?taskId=${encodeURIComponent(task.taskId)}`}>{t('음성 화면 크게 열기 ↗', 'Open full voice view ↗')}</Link></div></section>}
       <details className="card scenario-panel"><summary>{t('내 작업 다시 열기', 'Reopen my Tasks')}</summary><button className="button secondary" onClick={() => void listTasks()}>{t('내 작업 조회', 'View my Tasks')}</button><div className="api-actions">{list.map(item => <Link key={item.taskId} className="text-link" href={`/chat/${item.taskId}`}>{item.goal === defaultGoal ? t(defaultGoal, "Buy one pack of previously prescribed medicine") : item.goal} · {resultLabel(item, locale)} ↗</Link>)}</div></details>
     </>}
     {busy && <p role="status">{phaseLabel(phase, locale)} · {t("같은 요청을 중복 전송하지 않습니다.", "No duplicate request will be sent.")}</p>}{notice && <p role="status">{localizedScenarioMessage(notice, locale)}</p>}{error && <><p role="alert">{localizedScenarioMessage(error, locale)}</p>{scenarioCode(error) && <details className="studio-details"><summary>{t("진단 코드", "Diagnostic code")}</summary><code>{scenarioCode(error)}</code></details>}</>}{stopped && <p role="alert">{t('이 브라우저의 후속 실행이 잠겼습니다. 서버와 체인 상태를 별도로 확인하세요.', 'Further actions are locked in this browser. Check server and chain status separately.')}</p>}

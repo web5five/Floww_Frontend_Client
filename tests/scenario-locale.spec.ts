@@ -5,9 +5,15 @@ const owner = "0x1111111111111111111111111111111111111111";
 const taskId = "11111111-2222-4333-8444-000000000036";
 const asset = { chainId: 11155111, tokenAddress: "0x2222222222222222222222222222222222222222", tokenDecimals: 6 };
 
-test("language setting keeps the authenticated scenario on the same Task at desktop and mobile widths", async ({ page }) => {
+test("header, chat, and settings language controls keep one authenticated Task", async ({ page }, testInfo) => {
   const posts: string[] = [];
+  const writes: string[] = [];
   let task: TaskView | null = null;
+  page.on("request", request => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method()) && new URL(request.url()).pathname.startsWith("/api/")) {
+      writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    }
+  });
   await page.route("**/api/wallet-auth/*", route => route.fulfill({ json: route.request().url().endsWith("/config")
     ? { enabled: true, mode: "team-jwt", businessReady: true }
     : { identity: { namespace: "eip155", address: owner }, chainId: "11155111", expiresAt: new Date(Date.now() + 3600000).toISOString() } }));
@@ -34,9 +40,13 @@ test("language setting keeps the authenticated scenario on the same Task at desk
   await expect(page).toHaveURL(new RegExp(`/journey/${taskId}/mandate`));
   await expect(page.getByRole("navigation", { name: "구매 단계" })).toBeVisible();
   expect(posts).toEqual(["/api/tasks"]);
+  const writesAfterCreation = [...writes];
+  const savedTask = task as TaskView | null;
+  expect(savedTask).not.toBeNull();
+  const savedAmount = savedTask!.mandate.maxAmountBaseUnits;
+  const savedDeadline = savedTask!.mandate.expiresAt;
 
-  await page.evaluate(() => { document.cookie = "floww-locale=en; Path=/; SameSite=Lax"; });
-  await page.reload();
+  await page.getByRole("button", { name: "영어로 변경" }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.getByRole("navigation", { name: "Purchase steps" })).toContainText("Wallet approval");
   await expect(page.locator("#scenario-progress")).toContainText("Purchase goal");
@@ -58,16 +68,35 @@ test("language setting keeps the authenticated scenario on the same Task at desk
   await expect(page.locator("#scenario-progress")).toContainText("Purchase goal");
   await page.getByRole("textbox", { name: "Display language request" }).fill("What is the price?");
   await page.getByRole("button", { name: "Send request" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "This input changes display language only" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "To change the display language" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page).toHaveURL(new RegExp(`/chat/${taskId}`));
   expect(posts).toEqual(["/api/tasks"]);
+  expect(writes).toEqual(writesAfterCreation);
+  expect(task).toBe(savedTask);
+  expect(task!.mandate.maxAmountBaseUnits).toBe(savedAmount);
+  expect(task!.mandate.expiresAt).toBe(savedDeadline);
+  await page.screenshot({ path: `artifacts/f036b2-chat-${testInfo.project.name}.png`, fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  if (testInfo.project.name === "mobile") {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await expect(page.getByRole("textbox", { name: "Display language request" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send request" })).toBeVisible();
+    await expect(page.locator('.chat-voice-entry button[aria-controls="floww-voice-panel"]')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: "artifacts/f036b2-chat-mobile-320.png", fullPage: true });
+  }
 
-  await page.evaluate(() => { document.cookie = "floww-locale=ko; Path=/; SameSite=Lax"; });
+  await page.getByRole("navigation", { name: "Main menu" }).getByRole("link", { name: "Settings" }).click();
+  await page.getByRole("radio", { name: "Korean" }).check();
+  await expect(page.locator("html")).toHaveAttribute("lang", "ko");
+  await page.goto(`/chat/${taskId}`);
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "ko");
   await expect(page).toHaveTitle(/작업 대화/);
   await expect(page.locator(".chat-messages .user")).toContainText("구매 요청");
   expect(posts).toEqual(["/api/tasks"]);
+  expect(writes).toEqual(writesAfterCreation);
+  expect(task!.mandate.maxAmountBaseUnits).toBe(savedAmount);
+  expect(task!.mandate.expiresAt).toBe(savedDeadline);
 });
