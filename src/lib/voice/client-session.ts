@@ -79,13 +79,18 @@ export async function closeVoiceResources(active: VoiceResources | null): Promis
   releaseVoiceResources(active);
 }
 
-export function connectionMessage(error: unknown): string {
+export function connectionMessage(error: unknown, locale: "ko" | "en" = "ko"): string {
   const code = error instanceof Error ? error.message : "";
-  return code === "AUTH" ? "로그인 상태를 확인한 뒤 다시 시작해 주세요."
-    : code === "THROTTLED" ? "잠시 기다린 뒤 다시 시작해 주세요."
-    : code === "TASK" ? "이 작업을 확인하지 못했어요. 작업 화면에서 다시 확인해 주세요."
-    : code === "CONFIG" ? "음성 연결이 준비되지 않았어요. 잠시 후 다시 시도해 주세요."
-    : code === "UNSUPPORTED" ? "이 브라우저에서는 마이크 음성 대화를 사용할 수 없어요."
-    : error instanceof DOMException && error.name === "NotAllowedError" ? "마이크 권한을 허용한 뒤 다시 시작해 주세요."
-    : "음성 연결을 확인하지 못했어요. 다시 시도해 주세요.";
+  const messages = {
+    AUTH: ["로그인 상태를 확인한 뒤 다시 시작해 주세요.", "Check your login and start again."],
+    THROTTLED: ["잠시 기다린 뒤 다시 시작해 주세요.", "Wait a moment, then start again."],
+    TASK: ["이 작업을 확인하지 못했어요. 작업 화면에서 다시 확인해 주세요.", "We could not verify this task. Check it on the task screen."],
+    CONFIG: ["음성 연결이 준비되지 않았어요. 잠시 후 다시 시도해 주세요.", "Voice is not ready. Try again shortly."],
+    UNSUPPORTED: ["이 브라우저에서는 마이크 음성 대화를 사용할 수 없어요.", "Microphone conversations are unavailable in this browser."],
+    DENIED: ["마이크 권한을 허용한 뒤 다시 시작해 주세요.", "Allow microphone access, then start again."],
+    CONNECT: ["음성 연결을 확인하지 못했어요. 다시 시도해 주세요.", "We could not connect voice. Try again."],
+  } as const;
+  const key = code === "AUTH" || code === "THROTTLED" || code === "TASK" || code === "CONFIG" || code === "UNSUPPORTED" ? code
+    : error instanceof DOMException && error.name === "NotAllowedError" ? "DENIED" : "CONNECT";
+  return messages[key][locale === "en" ? 1 : 0];
 }

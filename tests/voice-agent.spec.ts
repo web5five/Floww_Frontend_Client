@@ -63,6 +63,7 @@ test("chat microphone requires a click, recovers denial, retains task and releas
   await expect(panel).toContainText("듣는 중");
   expect(voiceRequests).toHaveLength(1);
   expect(new URL(voiceRequests[0]).searchParams.get("taskId")).toBe(taskId);
+  expect(new URL(voiceRequests[0]).searchParams.get("locale")).toBe("ko");
   await page.evaluate(() => {
     const fixture = (window as unknown as { voiceFixture: { emit: (event: unknown) => void } }).voiceFixture;
     fixture.emit({ type: "conversation.item.input_audio_transcription.completed", item_id: "user-1", transcript: "현재 작업을 알려줘" });
@@ -151,4 +152,54 @@ test("auth expiry during pending microphone permission stops a late stream witho
   await page.evaluate(() => (window as unknown as { expiryVoiceFixture: { resolveMic(): void } }).expiryVoiceFixture.resolveMic());
   await expect.poll(() => page.evaluate(() => (window as unknown as { expiryVoiceFixture: { stops: number } }).expiryVoiceFixture.stops)).toBe(1);
   expect(voiceRequests).toBe(0);
+});
+
+test("English voice screen uses the selected language and keeps scenario confirmation on screen", async ({ page }) => {
+  await page.context().addCookies([{ name: "floww-locale", value: "en", domain: "127.0.0.1", path: "/" }]);
+  const task = { taskId, status: "AWAITING_APPROVAL", statusReasonCode: null, goal: "Medication purchase", mandate: { mandateId: taskId, version: 1, status: "DRAFT", itemId: "acetaminophen-500mg-10", maxAmountBaseUnits: "60000000", consumedBaseUnits: "0", remainingBaseUnits: "60000000", asset: { tokenDecimals: 6, chainId: 11155111, tokenAddress: `0x${"2".repeat(40)}` }, expiresAt: new Date(Date.now() + 3600000).toISOString(), budgetScope: "TASK_CUMULATIVE" }, attempts: [], updatedAt: new Date().toISOString(), completedAt: null };
+  const mutations: string[] = [], voiceRequests: string[] = [];
+  await page.route("**/api/wallet-auth/*", route => route.fulfill({ json: route.request().url().endsWith("config") ? { enabled: true, mode: "team-jwt", businessReady: true } : { identity: { namespace: "eip155", address: owner }, chainId: "11155111", expiresAt: new Date(Date.now() + 600000).toISOString() } }));
+  await page.route("**/api/tasks**", route => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === "POST") mutations.push(path);
+    return route.fulfill({ json: path === "/api/tasks" ? [task] : path.endsWith("/events") ? { events: [], nextCursor: 0, hasMore: false } : task });
+  });
+  await page.route("**/api/voice/session?*", route => { voiceRequests.push(route.request().url()); return route.fulfill({ contentType: "application/sdp", body: "v=0\r\n" }); });
+  await page.addInitScript(({ owner }) => {
+    const provider = { request: async ({ method }: { method: string }) => method === "eth_chainId" ? "0xaa36a7" : [owner], on() {}, removeListener() {} };
+    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "english-voice-fixture", name: "Voice Fixture" }, provider } })));
+    const track = new EventTarget() as EventTarget & { enabled: boolean; stop(): void };
+    track.enabled = true; track.stop = () => {};
+    Object.defineProperty(navigator.mediaDevices, "getUserMedia", { value: async () => ({ getTracks: () => [track], getAudioTracks: () => [track] }) });
+    let channel: { onopen: () => void; onmessage: (event: { data: string }) => void } | null = null;
+    Object.assign(window, { englishVoiceFixture: { emit: (event: unknown) => channel?.onmessage({ data: JSON.stringify(event) }) } });
+    class Peer {
+      localDescription = { sdp: "v=0\r\n" };
+      addTrack() {}
+      createDataChannel() { channel = { onopen: () => {}, onmessage: () => {} }; return { ...channel, get readyState() { return "open"; }, close() {}, send() {}, set onopen(value: () => void) { if (channel) channel.onopen = value; }, set onmessage(value: (event: { data: string }) => void) { if (channel) channel.onmessage = value; } }; }
+      async createOffer() { return { type: "offer", sdp: "v=0\r\n" }; }
+      async setLocalDescription() {}
+      async setRemoteDescription() { channel?.onopen(); }
+      close() {}
+    }
+    Object.assign(window, { RTCPeerConnection: Peer });
+  }, { owner });
+  await page.goto("/login");
+  await page.getByRole("button", { name: /^(지갑 선택|Choose wallet)$/ }).click();
+  await page.getByRole("button", { name: /Voice Fixture.*(감지됨|Detected)/ }).click();
+  await page.getByRole("button", { name: /Voice Fixture (연결|Connect)/ }).click();
+  await page.locator('a[href="/dashboard"]').first().click();
+  await page.getByText(/^(내 작업 다시 열기|Reopen my Tasks)$/).click();
+  await page.getByRole("button", { name: /^(내 작업 조회|View my Tasks)$/ }).click();
+  await page.locator(`a[href="/chat/${taskId}"]`).click();
+  await page.getByRole("button", { name: "Open voice conversation" }).click();
+  const panel = page.getByRole("region", { name: "Floww voice conversation" });
+  await expect(panel.getByRole("button", { name: "Start voice conversation" })).toBeEnabled();
+  await panel.getByRole("button", { name: "Start voice conversation" }).click();
+  await expect(panel).toContainText("Listening");
+  expect(new URL(voiceRequests[0]).searchParams.get("locale")).toBe("en");
+  await page.evaluate(() => (window as unknown as { englishVoiceFixture: { emit(event: unknown): void } }).englishVoiceFixture.emit({ type: "response.output_item.done", item: { type: "function_call", name: "request_scenario", arguments: JSON.stringify({ intent: "over-budget" }), call_id: "call-en" } }));
+  await expect(panel.getByRole("group", { name: "Confirm scenario request" })).toContainText("Over budget");
+  expect(mutations).toEqual([]);
+  await panel.getByRole("button", { name: "End conversation" }).click();
 });
