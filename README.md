@@ -1,201 +1,64 @@
-<img width="1672" height="941" alt="ChatGPT Image 2026년 9월 30일 오전 01_56_33" src="https://github.com/user-attachments/assets/599323b0-5701-472b-8192-3d0cddfb3b93" />
+# Floww Client
 
-<div align="center">
+Floww is a Next.js client for requesting a purchase, reviewing its limits and evidence, and following one server Task through approval, execution, and recovery. The user explicitly approves wallet and spending steps; a model suggestion, quote, login, or transaction hash does not prove fulfillment.
 
-# 🌊 Floww Client
+## Current product paths
 
-### Your request. Your call. Your flow.
+| Route | What it does |
+| --- | --- |
+| `/` | Overview and process explanation. |
+| `/settings` | Persistent Korean or English display preference, available before login. |
+| `/login` | MetaMask browser wallet or Magic email wallet, then the same server SIWE challenge, verification, and HttpOnly session. |
+| `/pharmacy` | Three authenticated purchase scenarios: permitted, over budget, and recipient condition. |
+| `/journey/[taskId]/[step]` | Same-Task mandate, quotes, policy, approval, execution, and result views. |
+| `/chat/[taskId]` | Same-Task event conversation, bounded display-language input, and voice entry. |
+| `/voice` | Voice conversation tied to the current Task; scenario requests return to an explicit on-screen confirmation. |
+| `/dashboard` | Owner-scoped Task reopening and status. |
 
-**An AI-assisted purchase experience where every proposal stays in your hands.**
+The Task Account path checks the server proposal, exact amount and recipient, wallet approval, funding, payment state, receipts, and fulfillment evidence. `DENY` and unknown payment state remain explicit. The app does not automatically re-send an uncertain payment, and voice cannot approve or pay. The selected display language changes the product UI; it does not rewrite persisted Task content, user input, or signed payloads. See the [integrated Client handoff](docs/F033_INTEGRATED_CLIENT_HANDOFF.md), [Task Account handoff](docs/task-execution-handoff.md), [voice contract](docs/F033D_VOICE_CONTRACT.md), and [F036 locale worklog](reports/F036_INTEGRATED_LOCALE_ACCEPTANCE.md).
 
-[![Status](https://img.shields.io/badge/Status-Foundation%20in%20Progress-4261FF?style=for-the-badge)](#current-state)
-[![Client](https://img.shields.io/badge/Floww-Client-FFFF5C?style=for-the-badge&labelColor=1E1E1E)](#what-is-floww-client)
+## Preview and verification status
 
-<br />
+The [protected Client Preview](https://floww-client-demo-preview-geond.vercel.app) was checked at source `5003d0a` for wallet configuration, backend health through the BFF, and unauthenticated route gating. Access needs the approved Vercel share link or account permission. That deployment is not the newer F036/F037 release candidate and does not establish a live wallet login or purchase.
 
-### 🔗 Live Demo
+The F037 Magic product integration is locally implemented and awaiting combined review, CI, deployment configuration, and real OTP acceptance. The earlier standalone Magic/server example verified an actual OTP/Sepolia/SIWE/JWT/logout path in its own environment; that evidence is separate from this Client Preview. Automated browser and adapter tests here use fixtures and synthetic public-format keys. Real provider, wallet signature, voice, payment, and fulfillment acceptance must be recorded against the exact deployed source.
 
-<!-- Add the deployed client URL when it is available. -->
-**Coming soon** · [Add live URL here](#)
+## Run locally
 
-<br />
+Use Node.js 24.19.0 and the lockfile-pinned dependencies:
 
-[Integration Hub](https://github.com/web5five/Floww) · [Server Integration Issue](https://github.com/web5five/Floww_Server/issues/1)
-
-</div>
-
----
-
-## ✨ What is Floww Client?
-
-Floww Client is the user-facing application for requesting, reviewing, and following an AI-assisted purchase.
-
-It is designed to keep the user informed and in control at every step:
-
-**Request → Delegation → Wallet Approval → Progress → Result → Recovery**
-
-> 🛡️ The client should make consequential actions clear, visible, and intentional.
-
----
-
-## 🧭 The User Journey
-
-| Step | Experience |
-|---|---|
-| 📝 **Request** | The user describes what they want to do. |
-| 🤝 **Delegation** | The user reviews and confirms the mandate before work begins. |
-| 🔐 **Wallet approval** | The user reviews the transaction and approves it with their wallet. |
-| ⏳ **Progress** | The client shows the current state while the request is being processed. |
-| ✅ **Result** | The user sees the outcome and relevant details. |
-| 🧰 **Recovery** | When something fails or needs attention, the client explains what happened and what to do next. |
-
----
-
-## 🚧 Current State
-
-The Next.js client connects wallet login, three purchase scenarios, same-Task chat and voice conversation. A scenario uses the server's stored Task, quotes and policy result; payment still requires the existing Task Account approval, exact token allowance/funding, order, receipt reconciliation and fulfillment verification. The chat microphone and `/voice` share the same voice component. Voice can request a scenario for on-screen confirmation; it cannot sign or pay.
-
-These actions require the configured owner JWT and enabled backend. OpenAI voice additionally needs a server-only key. See the [integrated client handoff](docs/F033_INTEGRATED_CLIENT_HANDOFF.md), [voice contract](docs/F033D_VOICE_CONTRACT.md) and [Task Account handoff](docs/task-execution-handoff.md). Automated fixtures and a live OpenAI transport probe do not establish hosted wallet-to-purchase E2E acceptance.
-
----
-
-## 🗺️ Roadmap
-
-The client foundation will grow into a working application through small, verifiable steps:
-
-- [x] Establish the application structure and supported runtime.
-- [x] Pin dependencies and provide a reproducible installation flow.
-- [x] Add placeholder-only environment variable examples.
-- [x] Build the request and mandate confirmation experience.
-- [x] Add wallet approval and transaction status screens.
-- [x] Show progress, results, and actionable recovery states.
-- [x] Add a real build and test workflow.
-- [ ] Verify startup and health in the intended environment.
-- [ ] Deploy the client and add its live URL above.
-
----
-
-## 🧑‍💻 Starting a Component Task
-
-1. Read [`AGENTS.md`](./AGENTS.md) and the latest shared architecture and API contract.
-2. Fetch remote refs, preserve teammate work, and open a bounded issue and feature branch.
-3. Pin the runtime and dependencies, and make installation reproducible.
-4. Add placeholder-only environment examples; never commit secrets.
-5. Add a real build/test job and verify startup and health in the intended environment.
-6. Link actual results in a PR and a bilingual Confluence handoff.
-
----
-
-## 🏗️ Architecture Notes
-
-Redis, pgvector, Kafka, Eureka, and Config Server are deferred baseline services. Do not add them just to populate an empty repository. Add only the dependencies required by an implemented client feature.
-
-Keep secrets and private team sources out of Git.
-
----
-
-## 🔗 Project Links
-
-| Resource | Link |
-|---|---|
-| 🌐 Integration hub | [web5five/Floww](https://github.com/web5five/Floww) |
-| ⚙️ Server integration issue | [Floww_Server — Issue #1](https://github.com/web5five/Floww_Server/issues/1) |
-| 🚀 Live client | **Coming soon** · [Add live URL here](#) |
-
----
-
-<div align="center">
-
-### Clear choices. Visible progress. Your flow. 🌊
-
-</div>
-
-
----
-
-## Implementation and runbook
-
-Floww helps users review purchase conditions and bounded spending proposals. This client includes local purchase/pharmacy previews, a server-side API proxy and wallet-login integration. It does **not** implement a complete payment or fulfillment flow.
-
-[Integration hub](https://github.com/web5five/Floww) | [Client journey issue](https://github.com/web5five/Floww_Frontend_Client/issues/2) | [Server integration issue](https://github.com/web5five/Floww_Server/issues/1)
-
-## Run
-
-Node.js 24.19.0 / npm 11.17.0; Next.js 16, React 19, TypeScript, Tailwind 4 and App Router.
-
-~~~sh
+```sh
 npm ci
 npm run dev -- --port 3001
-~~~
+```
 
-Open http://127.0.0.1:3001. No backend configuration is required for local demos.
+Open `http://127.0.0.1:3001`. Configure the backend and wallet auth for authenticated Task paths; missing configuration leaves those paths gated. In Orca worktrees whose `node_modules` is a symlink outside the checkout, use `npm run dev -- --port 3001 --webpack` or `npm run build -- --webpack` to avoid the Next.js Turbopack filesystem-root limitation.
 
-| Route | Behavior |
-| --- | --- |
-| / | Pharmacy-first landing |
-| /dashboard | Purchase conditions, local approval/rejection/STOP and activity; optional backend test workspace |
-| /pharmacy | Local pharmacy rehearsal, evidence checklist and authenticated server Task workspace |
-| /login | MetaMask browser wallet or Magic email wallet, followed by the same server SIWE authentication |
-
-The Magic email choice requires `NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY` with a valid `pk_` publishable key. Leave it blank to show a disabled, truthful choice. The client lazy loads `magic-sdk@33.13.0` only when email sign-in starts and requests Sepolia through the explicit RPC/chain ID configuration. Both wallet methods use `/api/wallet-auth` for the server challenge, exact sign-in message, verification, HttpOnly session and logout; an email or Magic DID is never a Floww owner credential. Server origin/chain allowlists and wallet authentication must also be configured before deployment. Login does not grant spending authority. See [Magic client handoff](docs/F037_MAGIC_WALLET_UI_KO_EN.md).
-
-Local pharmacy subtotals are 23.5/64/19 fUSDC against a 60 fUSDC Task limit; B demonstrates budget denial and C an unauthorized recipient. Fees, prescription/identity conditions and recipients remain unverified. A subtotal under budget is not policy ALLOW. Candidate changes clear review confirmation. Actual authorization is disabled. The older Nike demo remains available independently.
-
-## Checks
-
-~~~sh
+```sh
 npm run lint
 npm run typecheck
-npm run build
-~~~
+npm run build -- --webpack
+npm run start -- --port 3001
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 npm run test:e2e -- --workers=1
+node --conditions=react-server --experimental-strip-types tests/voice-agent-contract.mjs
+node --experimental-strip-types tests/voice-agent-lifecycle.mjs
+node --experimental-strip-types --test tests/magic-adapter.mjs
+node --experimental-strip-types --test tests/magic-component-flow.mjs
+node --conditions=react-server --experimental-strip-types --test tests/magic-product-flow.mjs
+```
 
-With Google Chrome installed and the development server running on port 3001:
+Browser tests need an existing Chrome or an explicitly configured `PLAYWRIGHT_CHROMIUM_EXECUTABLE`; do not treat their wallet/API fixtures as hosted provider proof.
 
-~~~sh
-npm run test:e2e
-node --conditions=react-server --experimental-strip-types tests/wallet-health.mjs
-~~~
+## Configuration and authority
 
-Set PLAYWRIGHT_BASE_URL for another running instance. Browser/API fixtures are not live purchase evidence. Production local preview: npm run build, then npm start -- --port 3001.
+Copy `.env.example` to an untracked `.env.local` and set only the values needed for the target environment. `FLOWW_API_BASE_URL`, wallet auth mode, allowed chain IDs, session encryption secret, and business JWT flag are server-side configuration. `OPENAI_API_KEY` is server-only for live voice. Never put a Magic secret key, backend token, or session secret in a `NEXT_PUBLIC_*` variable.
 
-## Server-only configuration
+`NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY` accepts only a `pk_`-format publishable key. Without it, the Magic choice is visible but disabled before SDK or OTP calls. With it, `magic-sdk@33.13.0` loads on the user's email action and requests Sepolia through the explicit RPC URL and chain ID. Next.js freezes `NEXT_PUBLIC_*` values into the browser bundle at **build time**, so a configured Preview needs the approved publishable key and exact Magic domain allowlist before its build. Both Magic and MetaMask must still pass the same server nonce, exact SIWE message, verification, and owner-scoped session; an email address, Magic DID, or provider label is not identity. Sign-in grants no spending approval. See the [Magic product handoff](docs/F037_MAGIC_WALLET_UI_KO_EN.md).
 
-Copy .env.example to .env.local. Never commit real values.
+The BFF uses HttpOnly/SameSite cookies for the team JWT and does not fall back to a shared development token for owner-scoped business requests. The backend must allow the exact frontend origin and Sepolia chain. The separate Admin app and deployment settings have their own authority boundaries.
 
-| Variable | Meaning |
-| --- | --- |
-| FLOWW_API_BASE_URL | Backend origin; remote wallet traffic requires HTTPS |
-| FLOWW_SERVER_DEV_TOKEN | Optional legacy development API credential; never wallet identity |
-| FLOWW_WALLET_AUTH_ENABLED | true only when corresponding server wallet support is enabled |
-| FLOWW_WALLET_AUTH_MODE | team-jwt by default; local-session is a separate comparison adapter |
-| FLOWW_WALLET_CHAIN_IDS | Allowed decimal chain IDs matching backend |
-| FLOWW_SESSION_SECRET | Server-only random 32-byte key encoded as 64 hex characters; stable across instances |
-| FLOWW_BUSINESS_JWT_ENABLED | Leave unset until business APIs accept wallet JWTs and enforce ownership |
+## Provenance and scope
 
-No secrets belong in NEXT_PUBLIC_* or browser storage. Team JWTs are encrypted in HttpOnly/SameSite=Strict cookies, Secure in production. The backend login-message origin must match the frontend origin. Missing settings never fabricate success.
+The wallet toolkit adapts the pinned Scaffold-ETH 2 provider/connector pattern; see its [source and MIT notice](docs/F033A_SCAFFOLD_ETH_NOTICE.md). Floww's Client was developed locally with Codex assistance before the repository import; the [import worklog](docs/worklogs/client-2-import.md) records its original scope and exclusions. Internal conversations, secrets, and local backend experiments are not included. This README reports implementation and bounded checks, not teammate approval, deployed F037 acceptance, or a completed real purchase.
 
-## API and authority boundaries
-
-The Next allowlist proxy supports health/readiness, AI drafts, test execution create/run/list/history/detail, event polling and evidence JSON. These are adapters, not deployed-service claims. No SSE or direct browser Kiln calls.
-
-Wallet login uses /api/v1/auth/wallet/nonce and /api/v1/auth/wallet/verify. A read-only health probe precedes signing. Server failures never trigger automatic repeated signatures. Session lookup reads the encrypted BFF cookie; logout clears this browser session only. Backend JWT revocation/refresh is unavailable in this adapter. Login is not mandate approval.
-
-Team-wallet business requests are gated until JWT support is explicitly enabled and never fall back to a shared development token. confirmed:true is only a legacy test-execution field, not spending authorization. REVIEWED is not payment success. Legacy proposed descriptors remain inert. The separate /api/tasks BFF now connects the implemented Task create/list/read, quotes, AI proposal, events, reject and cancel routes using the current server contract. Spending approval/order routes remain unavailable pending chain alignment.
-
-## Limits
-
-- Local STOP prevents further client actions; it cannot revoke remote execution or on-chain authority.
-- No real merchant purchase, payment, spending signature, transaction hash, balance or fulfillment success is synthesized.
-- EIP-712 approval, final quote/mandate/execution contracts, deployment URLs and payment/fulfillment evidence remain integration dependencies.
-- Pharmacy fixture amounts use six-decimal integer strings and BigInt. Legacy purchase-demo numbers are not suitable for chain settlement.
-- Automated wallets are test providers; real browser-extension and deployed end-to-end acceptance remain separate.
-- No admin page, Magic/email login, KYC, WalletConnect QR or private key handling is included.
-
-## Work record
-
-The application was developed locally with Codex assistance before this import. Existing shared instructions/templates are preserved. Internal PDFs, private discussions and local Java/PostgreSQL experiments are excluded. See [worklog](docs/worklogs/client-2-import.md) for this branch's verification. No human review, deployment or end-to-end purchase is implied.
-
-
-## Latest Task integration handoff
-
-See [client Task handoff](docs/client-task-handoff.md) for the exact server commit, implemented routes, hosting access observation, frontend/backend ownership and remaining live acceptance gates.
+[Integration hub](https://github.com/web5five/Floww) · [Client Task handoff](docs/client-task-handoff.md)

@@ -36,7 +36,7 @@ test("English wallet login keeps the product return path and translated dialog",
   expect(await page.locator("body").innerText()).not.toMatch(/[가-힣]/);
   await page.getByRole("button", { name: "Choose wallet" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("heading", { name: "Choose a wallet" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Choose how to sign in" })).toBeVisible();
   expect(await dialog.innerText()).not.toMatch(/[가-힣]/);
 });
 
@@ -54,11 +54,11 @@ test("locale change retranslates a pending wallet error and preserves the wallet
       on: () => {}, removeListener: () => {},
     };
     Object.assign(window, { walletFixture: state });
-    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "locale-fixture", name: "Fixture Wallet" }, provider } })));
+    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "locale-fixture", name: "MetaMask" }, provider } })));
   });
   await page.goto("/login");
   await page.getByRole("button", { name: "지갑 선택", exact: true }).click();
-  await page.getByRole("button", { name: /Fixture Wallet.*이 브라우저에서 감지됨/ }).click();
+  await page.getByRole("button", { name: /MetaMask.*이 브라우저에서 감지됨/ }).click();
   await page.getByRole("tab", { name: "모바일" }).click();
   await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("denied"); } } }));
   await page.getByRole("button", { name: "이 페이지 주소 복사" }).click();
@@ -67,13 +67,13 @@ test("locale change retranslates a pending wallet error and preserves the wallet
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.getByRole("dialog").getByRole("alert")).toContainText("Could not copy the address.");
   await page.getByRole("tab", { name: "Desktop" }).click();
-  await page.getByRole("button", { name: "Fixture Wallet Connect" }).click();
+  await page.getByRole("button", { name: "Connect MetaMask" }).click();
   await expect(page.getByRole("dialog").getByRole("status")).toContainText("Wallet connection rejected.");
-  await page.getByRole("button", { name: "Fixture Wallet Connect" }).click();
-  await expect(page.getByText("Fixture Wallet connected", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Connect MetaMask" }).click();
+  await expect(page.getByText("MetaMask connected", { exact: true })).toBeVisible();
   await expect(page).toHaveTitle(/Floww — Buy with clarity/);
   await page.getByRole("button", { name: "Switch to Korean" }).click();
-  await expect(page.getByText("Fixture Wallet 연결됨", { exact: true })).toBeVisible();
+  await expect(page.getByText("MetaMask 연결됨", { exact: true })).toBeVisible();
   await expect(page).toHaveTitle(/Floww — 내 조건으로/);
   const calls = await page.evaluate(() => (window as unknown as { walletFixture: { calls: string[] } }).walletFixture.calls);
   expect(calls).not.toContain("personal_sign");

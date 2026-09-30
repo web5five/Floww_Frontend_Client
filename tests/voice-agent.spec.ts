@@ -167,7 +167,7 @@ test("English voice screen uses the selected language and keeps scenario confirm
   await page.route("**/api/voice/session?*", route => { voiceRequests.push(route.request().url()); return route.fulfill({ contentType: "application/sdp", body: "v=0\r\n" }); });
   await page.addInitScript(({ owner }) => {
     const provider = { request: async ({ method }: { method: string }) => method === "eth_chainId" ? "0xaa36a7" : [owner], on() {}, removeListener() {} };
-    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "english-voice-fixture", name: "Voice Fixture" }, provider } })));
+    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "english-voice-fixture", name: "MetaMask" }, provider } })));
     const state = { stops: 0, peersClosed: 0, emit: (event: unknown) => channel?.onmessage({ data: JSON.stringify(event) }) };
     const track = new EventTarget() as EventTarget & { enabled: boolean; stop(): void };
     track.enabled = true; track.stop = () => { state.stops++; };
@@ -187,8 +187,8 @@ test("English voice screen uses the selected language and keeps scenario confirm
   }, { owner });
   await page.goto("/login");
   await page.getByRole("button", { name: /^(지갑 선택|Choose wallet)$/ }).click();
-  await page.getByRole("button", { name: /Voice Fixture.*(감지됨|Detected)/ }).click();
-  await page.getByRole("button", { name: /Voice Fixture (연결|Connect)/ }).click();
+  await page.getByRole("button", { name: /MetaMask.*(감지됨|Detected)/ }).click();
+  await page.getByRole("button", { name: "Connect MetaMask" }).click();
   await page.locator('a[href="/dashboard"]').first().click();
   await page.getByText(/^(내 작업 다시 열기|Reopen my Tasks)$/).click();
   await page.getByRole("button", { name: /^(내 작업 조회|View my Tasks)$/ }).click();
