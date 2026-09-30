@@ -41,10 +41,18 @@
 }
 
 .voiceTools a { font-size: 14px; overflow-wrap: anywhere; }
+.voiceOverviewNote { margin: 14px 0 0; color: #52627f; font-size: 14px; line-height: 1.6; }
+.journeyVoice { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; margin: 18px 0; padding: 17px 19px; border: 1px solid #cedaff; border-radius: 17px; background: #f4f7ff; }
+.journeyVoice>div { min-width: 0; }
+.journeyVoice strong { color: #243b86; font-size: 15px; }
+.journeyVoice p { margin: 4px 0 0; color: #566783; font-size: 13px; line-height: 1.5; }
+.journeyVoice a { flex: 0 0 auto; }
 
 @media (max-width: 560px) {
   .languageForm { grid-template-columns: minmax(0, 1fr); }
   .sendButton { width: 100%; }
   .voiceTools { align-items: flex-start; flex-direction: column; gap: 10px; }
   .voiceTools p { flex: none; }
+  .journeyVoice { align-items: stretch; flex-direction: column; gap: 12px; padding: 15px; }
+  .journeyVoice a { width: 100%; text-align: center; }
 }

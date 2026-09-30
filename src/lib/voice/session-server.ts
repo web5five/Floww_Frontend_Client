@@ -8,6 +8,9 @@ const safeHeaders = { "Cache-Control": "no-store", "X-Content-Type-Options": "no
 const fail = (reasonCode: string, status: number) => Response.json({ reasonCode }, { status, headers: safeHeaders });
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const starts = new Map<string, number>();
+// One deadline covers headers and body, including a hosted Task API cold start.
+const taskReadTimeoutMs = 20000;
+const providerTimeoutMs = 12000;
 
 async function bounded(stream: ReadableStream<Uint8Array> | null, maximum: number, deadlineMs: number): Promise<string> {
   if (!stream) throw new Error("INVALID_BODY");
@@ -40,10 +43,11 @@ async function taskSummary(taskId: string, userId: string, token: string): Promi
   const target = backendUrl();
   if (!target) throw new Error("TASK_UNAVAILABLE");
   target.pathname = `/api/v1/tasks/${taskId}`;
+  const deadline = Date.now() + taskReadTimeoutMs;
   const result = await fetch(target, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...previewBypassHeader(target) },
-    cache: "no-store", redirect: "error", signal: AbortSignal.timeout(8000) });
+    cache: "no-store", redirect: "error", signal: AbortSignal.timeout(taskReadTimeoutMs) });
   if (!result.ok) throw new Error("TASK_UNAVAILABLE");
-  const raw = await bounded(result.body, 32768, Date.now() + 8000);
+  const raw = await bounded(result.body, 32768, deadline);
   const task: unknown = JSON.parse(raw);
   if (!task || typeof task !== "object" || Array.isArray(task)) throw new Error("TASK_UNAVAILABLE");
   const t = task as Record<string, unknown>;
@@ -107,10 +111,11 @@ export async function createVoiceSession(request: Request): Promise<Response> {
       { type: "function", name: "set_language", description: "Only when the user explicitly asks to change or translate this conversation to Korean or English, set the Floww interface language. This ends the current voice session. Does not alter Task content or approve an action.", parameters: { type: "object", properties: { locale: { type: "string", enum: ["ko", "en"] } }, required: ["locale"], additionalProperties: false } },
     ], tool_choice: "auto" }));
   try {
+    const deadline = Date.now() + providerTimeoutMs;
     const result = await fetch("https://api.openai.com/v1/realtime/calls", { method: "POST", headers: { Authorization: `Bearer ${key}`, "OpenAI-Safety-Identifier": bucket }, body: form,
-      cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(12000)]) });
+      cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(providerTimeoutMs)]) });
     if (!result.ok || result.status >= 300) return fail("VOICE_UPSTREAM_UNAVAILABLE", 502);
-    const answer = await bounded(result.body, 32768, Date.now() + 12000);
+    const answer = await bounded(result.body, 32768, deadline);
     // Realtime calls return SDP. Reject any unexpected body instead of relaying provider data.
     if (!answer.startsWith("v=0\r\n") || !answer.includes("\r\nm=audio ")) return fail("VOICE_UPSTREAM_UNAVAILABLE", 502);
     return new Response(answer, { status: 201, headers: { ...safeHeaders, "Content-Type": "application/sdp; charset=utf-8" } });
