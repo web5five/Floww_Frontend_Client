@@ -1,6 +1,15 @@
-@media(max-width:600px) {
-  .header:global(.site-header) { display:grid; grid-template-columns:1fr auto; gap:16px; }
+.header { flex-wrap:wrap; }
+.header nav { flex-wrap:wrap; justify-content:center; gap:12px 22px; }
+.actions { display:flex; align-items:center; gap:12px; }
+.localeSwitch { display:flex; border:1px solid #dce3f5; border-radius:99px; padding:3px; background:#fff; }
+.localeSwitch button { border:0; background:transparent; border-radius:99px; padding:8px 10px; color:#475569; font-size:12px; font-weight:700; min-height:36px; }
+.localeSwitch button[aria-pressed="true"] { background:#e9eeff; color:#233bcc; }
+@media(max-width:820px) {
+  .header:global(.site-header) { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px; }
   .header > a { grid-column:1; grid-row:1; }
-  .header > button { grid-column:2; grid-row:1; justify-self:end; margin:0; }
-  .header > nav { grid-column:1 / -1; grid-row:2; justify-content:center; width:100%; }
+  .header > nav { grid-column:1 / -1; grid-row:3; justify-content:space-between; width:100%; }
+  .actions { display:contents; }
+  .actions :global(.header-login) { grid-column:2; grid-row:1; justify-self:end; margin:0; }
+  .localeSwitch { grid-column:2; grid-row:2; justify-self:end; }
 }
+@media(max-width:450px) { .header nav { gap:7px 10px; font-size:12px; } .localeSwitch button { padding:7px; font-size:11px; } .actions :global(.header-login) { min-height:40px; padding:10px 13px; font-size:12px; } }

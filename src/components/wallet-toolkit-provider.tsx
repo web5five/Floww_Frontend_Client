@@ -7,6 +7,7 @@ import { WagmiProvider, useAccount } from "wagmi";
 import { isProvider } from "@/lib/auth/wallet";
 import { walletToolkitConfig } from "@/lib/auth/wallet-toolkit";
 import { WalletProvider, useWallet } from "./wallet-provider";
+import { useLocale } from "@/lib/i18n";
 
 function WalletConnectorBridge() {
   const { address, chainId, connector, status } = useAccount();
@@ -41,10 +42,11 @@ function WalletConnectorBridge() {
 // Same provider nesting as Scaffold-ETH 2, with the existing Floww wallet
 // session kept separate from a wagmi connection.
 export function WalletToolkitProvider({ children }: { children: ReactNode }) {
+  const { locale } = useLocale();
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } }));
   return <WagmiProvider config={walletToolkitConfig} reconnectOnMount={false}>
     <QueryClientProvider client={queryClient}>
-      <RainbowKitProvider theme={lightTheme({ accentColor: "#4261ff" })}>
+      <RainbowKitProvider locale={locale === "ko" ? "ko-KR" : "en-US"} theme={lightTheme({ accentColor: "#4261ff" })}>
         <WalletProvider><WalletConnectorBridge />{children}</WalletProvider>
       </RainbowKitProvider>
     </QueryClientProvider>

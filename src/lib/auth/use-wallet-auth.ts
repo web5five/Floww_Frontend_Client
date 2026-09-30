@@ -4,10 +4,26 @@ import { walletAuthAdapter as api, checkWalletBackend } from "./adapter";
 import type { WalletSession } from "./types";
 import type { WalletProvider } from "./wallet";
 import { account, chain } from "./wallet";
+import { useLocale } from "@/lib/i18n";
+
+const authErrors = {
+  status: ["서버 로그인 상태를 확인하지 못했습니다.", "Could not check the server sign-in status."],
+  expired: ["로그인 세션이 만료되었습니다. 다시 로그인해 주세요.", "Your sign-in session has expired. Please sign in again."],
+  logout: ["로그아웃의 서버 반영을 확인하지 못했습니다. 다시 로그아웃해 주세요.", "Could not confirm sign-out with the server. Please try signing out again."],
+  chain: ["지원하는 로그인 네트워크로 변경한 뒤 다시 연결해 주세요.", "Switch to a supported sign-in network, then reconnect."],
+  rejected: ["로그인 서명을 거절했습니다. 인증되지 않았습니다.", "You rejected the sign-in signature. You are not signed in."],
+  configuration: ["백엔드 연결 설정 필요 · 서버 주소와 인증 설정을 확인해 주세요.", "Server connection needs configuration. Check the server address and authentication settings."],
+  unavailable: ["서버가 아직 응답하지 않습니다. 지갑 연결은 유지됩니다. 잠시 후 로그인 메시지 서명 버튼으로 다시 시도해 주세요.", "The server is not responding yet. Your wallet stays connected. Try signing the sign-in message again shortly."],
+  nonce: ["로그인 메시지가 만료되었습니다. 버튼을 눌러 새 메시지를 요청해 주세요.", "The sign-in message expired. Select the button to request a new one."],
+  rate: ["요청이 많습니다. 잠시 후 직접 다시 시도해 주세요.", "Too many requests. Please try again shortly."],
+  general: ["로그인을 검증하지 못했습니다. 서버 설정과 지갑 상태를 확인한 뒤 다시 시도해 주세요.", "Could not verify sign-in. Check the server settings and wallet status, then try again."],
+} as const;
+type AuthError = keyof typeof authErrors;
 
 type Connection = { address: string; chainId: string };
 /** Server remains the authority. No session is synthesized from a wallet address. */
 export function useWalletAuth() {
+  const { t } = useLocale();
   const [enabled, setEnabled] = useState(false);
   const [supportedChainIds, setSupportedChainIds] = useState<string[]>([]);
   const [mode, setMode] = useState("local-session");
@@ -15,7 +31,7 @@ export function useWalletAuth() {
   const [session, setSession] = useState<WalletSession | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [phase, setPhase] = useState("idle");
-  const [error, setError] = useState("");
+  const [errorCode, setError] = useState<AuthError | "">("");
   const serial = useRef(0);
   const pending = useRef(false);
   const loggingOut = useRef(false);
@@ -35,7 +51,7 @@ export function useWalletAuth() {
           const s = await api.getSession();
           if (active && lifecycle.current === version) setSession(s && Date.parse(s.expiresAt) > Date.now() ? s : null);
         }
-      } catch { if (active) setError("서버 로그인 상태를 확인하지 못했습니다."); }
+      } catch { if (active) setError("status"); }
       finally { if (active) setInitialized(true); }
     };
     void init();
@@ -46,7 +62,7 @@ export function useWalletAuth() {
     const expire = () => {
       if (Date.parse(session.expiresAt) <= Date.now()) {
         serial.current++;
-        setSession(null); setError("로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
+        setSession(null); setError("expired");
       }
     };
     const timer = setTimeout(expire, Math.max(0, Date.parse(session.expiresAt) - Date.now()));
@@ -59,12 +75,12 @@ export function useWalletAuth() {
     serial.current++; setSession(null); setPhase("idle");
     if (!enabledRef.current) return;
     loggingOut.current = true;
-    try { await api.logout(); setError(""); } catch { setError("로그아웃의 서버 반영을 확인하지 못했습니다. 다시 로그아웃해 주세요."); }
+    try { await api.logout(); setError(""); } catch { setError("logout"); }
     finally { loggingOut.current = false; }
   }
   async function login(connection: Connection, provider: WalletProvider) {
     if (!enabledRef.current || pending.current || loggingOut.current) return;
-    if (supportedChainIds.length && !supportedChainIds.includes(BigInt(connection.chainId).toString())) { setError("지원하는 로그인 네트워크로 변경한 뒤 다시 연결해 주세요."); return; }
+    if (supportedChainIds.length && !supportedChainIds.includes(BigInt(connection.chainId).toString())) { setError("chain"); return; }
     pending.current = true; const version = ++serial.current; setError(""); setPhase("requesting_challenge");
     const current = () => version === serial.current;
     try {
@@ -105,14 +121,14 @@ export function useWalletAuth() {
       if (current()) {
         setSession(null); setPhase("idle");
         const code = cause instanceof Error ? cause.message : "";
-        setError((cause as { code?: number })?.code === 4001 ? "로그인 서명을 거절했습니다. 인증되지 않았습니다."
-          : ["BACKEND_NOT_CONFIGURED", "AUTH_SESSION_NOT_CONFIGURED"].includes(code) ? "백엔드 연결 설정 필요 · 서버 주소와 인증 설정을 확인해 주세요."
-          : code === "AUTH_UPSTREAM_UNAVAILABLE" || (cause instanceof Error && ["TimeoutError", "TypeError"].includes(cause.name)) ? "서버가 아직 응답하지 않습니다. 지갑 연결은 유지됩니다. 잠시 후 로그인 메시지 서명 버튼으로 다시 시도해 주세요."
-          : code === "NONCE_EXPIRED" ? "로그인 메시지가 만료되었습니다. 버튼을 눌러 새 메시지를 요청해 주세요."
-          : code === "TOO_MANY_REQUESTS" ? "요청이 많습니다. 잠시 후 직접 다시 시도해 주세요."
-          : "로그인을 검증하지 못했습니다. 서버 설정과 지갑 상태를 확인한 뒤 다시 시도해 주세요.");
+        setError((cause as { code?: number })?.code === 4001 ? "rejected"
+          : ["BACKEND_NOT_CONFIGURED", "AUTH_SESSION_NOT_CONFIGURED"].includes(code) ? "configuration"
+          : code === "AUTH_UPSTREAM_UNAVAILABLE" || (cause instanceof Error && ["TimeoutError", "TypeError"].includes(cause.name)) ? "unavailable"
+          : code === "NONCE_EXPIRED" ? "nonce"
+          : code === "TOO_MANY_REQUESTS" ? "rate"
+          : "general");
       }
     } finally { pending.current = false; }
   }
-  return { enabled, initialized, mode, businessReady, supportedChainIds, session, phase, error, login, logout, busy: !["idle", "authenticated"].includes(phase) };
+  return { enabled, initialized, mode, businessReady, supportedChainIds, session, phase, error: errorCode ? t(authErrors[errorCode][0], authErrors[errorCode][1]) : "", login, logout, busy: !["idle", "authenticated"].includes(phase) };
 }
