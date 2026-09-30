@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useWallet } from "./wallet-provider";
 import { tasks } from "@/lib/api/task-client";
 import { accountApi, assertLive, checkedApproval, checkedDeployment, checkedFunding, checkSignature, validateAccount, type Approval, type Funding, type TaskAccount } from "@/lib/api/task-account";
@@ -76,16 +76,25 @@ function localizedExecutionMessage(message: string, locale: "ko" | "en"): string
 export function TaskExecution({ task, stopped, isStopped, onTask }: { task: TaskView; stopped: boolean; isStopped: () => boolean; onTask: (t: TaskView) => void }) {
   const wallet = useWallet(), owner = wallet.auth.session?.identity.address ?? "";
   const { locale, t } = useLocale();
-  const [account, setAccount] = useState<TaskAccount | null>(null), [funding, setFunding] = useState<Funding | null>(null);
-  const [pending, setPending] = useState<WalletOperation | null>(null), [busy, setBusy] = useState(false), [ready, setReady] = useState(false);
-  const [serverUnknown, setServerUnknown] = useState<ServerUnknown | null>(null);
-  const unknownRef = useRef<ServerUnknown | null>(null);
+  const scopeKey = `${owner.toLowerCase()}:${task.taskId}`;
+  const [accountState, setAccount] = useState<TaskAccount | null>(null), [funding, setFunding] = useState<Funding | null>(null);
+  const [pendingState, setPending] = useState<WalletOperation | null>(null), [busy, setBusy] = useState(false);
+  const [serverUnknownState, setServerUnknown] = useState<ServerUnknown | null>(null);
+  const [restoredScope, setRestoredScope] = useState("");
+  const [storageValid, setStorageValid] = useState(false);
+  const [restoration, setRestoration] = useState<"loading" | "unprepared" | "restored" | "failed">("loading");
+  const account = restoredScope === scopeKey ? accountState : null;
+  const pending = restoredScope === scopeKey ? pendingState : null;
+  const serverUnknown = restoredScope === scopeKey ? serverUnknownState : null;
+  const ready = restoredScope === scopeKey && (restoration === "unprepared" || restoration === "restored");
+  const unknownRef = useRef<ServerUnknown | null>(null), pendingRef = useRef<WalletOperation | null>(null);
   const [error, setError] = useState(""), [notice, setNotice] = useState("");
-  const locked = useRef(false), alive = useRef(true), latest = useRef({ isStopped, owner });
+  const locked = useRef(false), alive = useRef(false), latest = useRef({ isStopped, owner, taskId: task.taskId });
+  const onTaskRef = useRef(onTask), generationRef = useRef(0), hasRecoveryRef = useRef(false), storageValidRef = useRef(false), restoringRef = useRef<number | null>(null);
   const poll = useRef({ key: "", attempts: 0 });
   const reconcileRef = useRef<() => Promise<void>>(async () => {});
   const [visibilityEpoch, setVisibilityEpoch] = useState(0);
-  useEffect(() => { latest.current = { isStopped, owner }; }, [isStopped, owner]);
+  useLayoutEffect(() => { latest.current = { isStopped, owner, taskId: task.taskId }; onTaskRef.current = onTask; }, [isStopped, owner, task.taskId, onTask]);
   useEffect(() => {
     const visible = () => { if (!document.hidden) setVisibilityEpoch(value => value + 1); };
     document.addEventListener("visibilitychange", visible);
@@ -93,11 +102,51 @@ export function TaskExecution({ task, stopped, isStopped, onTask }: { task: Task
   }, []);
   const storageKey = `floww-account-wallet:${owner.toLowerCase()}:${task.taskId}`;
   const unknownKey = `floww-account-server:${owner.toLowerCase()}:${task.taskId}`;
+  const restoreReadOnly = useCallback(async (generation: number) => {
+    if (restoringRef.current !== null || !storageValidRef.current || !owner || !task.taskId) return;
+    const current = () => alive.current && generationRef.current === generation
+      && latest.current.owner === owner && latest.current.taskId === task.taskId && !latest.current.isStopped();
+    if (!current()) return;
+    restoringRef.current = generation;
+    setRestoration("loading"); setAccount(null); setFunding(null); setError("");
+    try {
+      const fresh = await tasks.get(task.taskId);
+      if (!current()) return;
+      let restored: TaskAccount | null = null;
+      try {
+        restored = validateAccount(await accountApi.get(task.taskId), fresh, owner);
+      } catch (cause) {
+        const unprepared = cause instanceof Error && /^CHAIN_NOT_READY(?: ·|$)/.test(cause.message)
+          && fresh.status === "AWAITING_APPROVAL" && fresh.attempts.some(attempt =>
+            attempt.policy.decision === "ALLOW" && attempt.mandateId === fresh.mandate.mandateId
+            && attempt.mandateVersion === fresh.mandate.version)
+          && !hasRecoveryRef.current && !pendingRef.current && !unknownRef.current;
+        if (!unprepared) throw cause;
+      }
+      if (!current()) return;
+      setAccount(restored); setFunding(null);
+      if (restored && unknownRef.current && restored.state !== unknownRef.current.fromState) {
+        sessionStorage.removeItem(unknownKey); unknownRef.current = null; setServerUnknown(null);
+      }
+      const savedPending = pendingRef.current;
+      if (restored && savedPending?.kind === "deploy" && savedPending.hash
+        && restored.deployTxHash?.toLowerCase() === savedPending.hash.toLowerCase() && restored.state !== "PREPARED") {
+        sessionStorage.removeItem(storageKey); pendingRef.current = null; setPending(null);
+      }
+      onTaskRef.current(fresh);
+      setRestoration(restored ? "restored" : "unprepared");
+    } catch (cause) {
+      if (current()) { setRestoration("failed"); setError(cause instanceof Error ? cause.message : "요청 결과를 확인하지 못했습니다."); }
+    } finally { if (restoringRef.current === generation) restoringRef.current = null; }
+  }, [owner, task.taskId, storageKey, unknownKey]);
   useEffect(() => {
-    alive.current = true;
-    queueMicrotask(() => { if (!alive.current) return;
+    const generation = ++generationRef.current;
+    alive.current = true; restoringRef.current = null; hasRecoveryRef.current = false; storageValidRef.current = false;
+    queueMicrotask(() => { if (!alive.current || generationRef.current !== generation) return;
+    setRestoredScope(scopeKey); setStorageValid(false); setRestoration("loading"); setAccount(null); setFunding(null); setError(""); setNotice("");
     try {
       unknownRef.current = null;
+      pendingRef.current = null;
       setServerUnknown(null);
       setPending(null);
       const raw = sessionStorage.getItem(storageKey);
@@ -108,6 +157,7 @@ export function TaskExecution({ task, stopped, isStopped, onTask }: { task: Task
           : stored;
         if (!["deploy","allowance","fund"].includes(value.kind) || (value.hash !== null && !/^0x[0-9a-f]{64}$/i.test(value.hash)) || typeof value.confirmed !== "boolean" || !/^0x[0-9a-f]{64}$/i.test(value.dataHash)) throw new Error();
         if (stored.data) sessionStorage.setItem(storageKey, JSON.stringify(value));
+        pendingRef.current = value;
         setPending(value);
       }
       const savedUnknown = sessionStorage.getItem(unknownKey);
@@ -117,16 +167,20 @@ export function TaskExecution({ task, stopped, isStopped, onTask }: { task: Task
         unknownRef.current = value;
         setServerUnknown(value);
       }
-      setReady(true);
-    } catch { setError("거래 복구 기록을 읽을 수 없습니다. 중복 지급 방지를 위해 지갑 실행을 잠갔습니다."); }
+      hasRecoveryRef.current = !!raw || !!savedUnknown;
+      storageValidRef.current = true;
+      setStorageValid(true);
+      void restoreReadOnly(generation);
+    } catch { setRestoration("failed"); setError("거래 복구 기록을 읽을 수 없습니다. 중복 지급 방지를 위해 지갑 실행을 잠갔습니다."); }
     });
-    return () => { alive.current = false; };
-  }, [storageKey, unknownKey]);
-  function allowed() { return alive.current && !latest.current.isStopped() && latest.current.owner === owner; }
+    return () => { alive.current = false; if (generationRef.current === generation) generationRef.current = generation + 1; };
+  }, [storageKey, unknownKey, scopeKey, restoreReadOnly]);
+  function allowed() { return alive.current && !latest.current.isStopped() && latest.current.owner === owner && latest.current.taskId === task.taskId; }
   function ensure() { if (!allowed()) throw new Error("STOPPED 또는 지갑 세션 변경 · 후속 실행 금지"); }
   function save(value: WalletOperation | null) {
     // Storage must succeed BEFORE asking the wallet; failure locks execution.
     if (value) sessionStorage.setItem(storageKey, JSON.stringify(value)); else sessionStorage.removeItem(storageKey);
+    pendingRef.current = value;
     if (alive.current) setPending(value);
   }
   function saveUnknown(value: ServerUnknown | null) {
@@ -143,9 +197,9 @@ export function TaskExecution({ task, stopped, isStopped, onTask }: { task: Task
   async function refresh() {
     const t = await tasks.get(task.taskId); ensure();
     const a = validateAccount(await accountApi.get(task.taskId), t, owner); ensure();
-    onTask(t); setAccount(a); setFunding(null);
+    onTaskRef.current(t); setAccount(a); setFunding(null);
     if (unknownRef.current && a.state !== unknownRef.current.fromState) saveUnknown(null);
-    if (pending?.kind === "deploy" && pending.hash && a.deployTxHash?.toLowerCase() === pending.hash.toLowerCase() && a.state !== "PREPARED") save(null);
+    if (pendingRef.current?.kind === "deploy" && pendingRef.current.hash && a.deployTxHash?.toLowerCase() === pendingRef.current.hash.toLowerCase() && a.state !== "PREPARED") save(null);
     return {t,a};
   }
   async function live() { const result = await refresh(); assertLive(result.t,result.a); return result; }
@@ -218,15 +272,18 @@ export function TaskExecution({ task, stopped, isStopped, onTask }: { task: Task
     <div className="section-heading"><h3>{t('선택한 구매 진행', 'Selected purchase progress')}</h3><span className="tag">{stopped ? t("진행 중지", "Stopped") : progress?.completed ? t("이행 확인됨", "Fulfillment verified") : progress?.paid ? t("지급 확인됨", "Payment verified") : account?.state === "PREPARED" ? t("지갑 배포 대기", "Awaiting wallet deployment") : account?.state?.endsWith("_UNKNOWN") ? t("거래 확인 중", "Checking transaction") : t("승인 준비", "Preparing approval")}</span></div>
     <p className="form-note">{t('구매 조건을 확인한 뒤 지갑의 각 승인 요청을 직접 확인해 주세요.', 'Review purchase conditions, then confirm each wallet approval request yourself.')}</p><details className="studio-details"><summary>{t('거래 환경과 이행 범위', 'Transaction environment and fulfillment scope')}</summary><p>{t('Sepolia의 테스트 토큰으로 거래합니다. 약국 이행 응답은 검증용 판매자 서비스에서 제공하며 실제 의약품 배송을 의미하지 않습니다.', 'Transactions use test tokens on Sepolia. Pharmacy fulfillment responses come from a verification service and do not mean real medicine was delivered.')}</p></details>
     {!wallet.connection && <Link className="text-link" href="/login">{t('서명할 지갑 연결 확인 ↗', 'Check signing wallet connection ↗')}</Link>}
+    {restoredScope === scopeKey && restoration === "loading" && <p role="status">{t('현재 작업과 계정 상태를 확인하고 있습니다. 확인 전에는 후속 실행을 진행하지 않습니다.', 'Checking the current Task and account status. Further actions are paused until the check completes.')}</p>}
+    {restoredScope === scopeKey && restoration === "unprepared" && <p role="status">{t('현재 작업에 연결된 계정을 확인하지 못했습니다. 새 계정을 준비하기 전에 체인 연결 상태도 확인하세요.', 'No account was returned for this Task. Check chain availability before preparing an account.')}</p>}
+    {restoredScope === scopeKey && restoration === "failed" && <p role="alert">{t('현재 계정 상태를 확인하지 못했습니다. 후속 실행은 잠겨 있습니다. 상태 조회를 다시 시도하세요.', 'The current account status could not be confirmed. Further actions are locked. Retry the status check.')}</p>}
     <div className="api-actions">
-      {!account && <button className="button primary" disabled={disabled || terminal || !eligible || !wallet.connection} onClick={()=>void run(async()=>{
+      {!account && restoration === "unprepared" && <button className="button primary" disabled={disabled || terminal || !eligible || !wallet.connection} onClick={()=>void run(async()=>{
         const t=await tasks.get(task.taskId); ensure();
         const attempt=t.attempts.find(a=>a.attemptId===eligible?.attemptId && a.policy.decision==="ALLOW" && a.mandateVersion===t.mandate.version);
         if (!attempt || t.status!=="AWAITING_APPROVAL") throw new Error("정책 통과 및 최신 Mandate를 다시 확인하세요.");
         const a=validateAccount(await accountApi.action(t.taskId,"prepare",{attemptId:attempt.attemptId,ownerAddress:owner}),t,owner); ensure();
         assertLive(t,a); onTask(t); setAccount(a);
       })}>{t('Mandate 확인 및 위임 승인 준비', 'Review mandate and prepare delegation approval')}</button>}
-      <button className="button secondary" disabled={disabled} onClick={()=>void run(async()=>{await refresh();})}>{t('계정·거래 상태 조회', 'Check account and transaction status')}</button>
+      <button className="button secondary" disabled={busy || stopped || restoredScope !== scopeKey || restoration === "loading" || !storageValid} onClick={()=>void restoreReadOnly(generationRef.current)}>{restoration === "failed" ? t('계정·거래 상태 다시 조회', 'Retry account and transaction status') : t('계정·거래 상태 조회', 'Check account and transaction status')}</button>
     </div>
     {account && <>
       <dl className="purchase-details"><div><dt>{t('구매 목적', 'Purchase goal')}</dt><dd>{locale === "en" && task.goal === "이미 처방받은 의약품 1팩 구매" ? "Buy one pack of previously prescribed medicine" : task.goal}</dd></div><div><dt>{t('선택 약국', 'Selected pharmacy')}</dt><dd>{selectedAttempt ? merchantLabel(selectedAttempt.merchantId, locale) : t("확인 중", "Checking")}</dd></div><div><dt>{t('이번 구매 금액', 'Purchase amount')}</dt><dd>{formatFusdc(account.amountBaseUnits)}</dd></div><div><dt>{t('작업 지출 한도', 'Task spending limit')}</dt><dd>{formatFusdc(task.mandate.maxAmountBaseUnits)}</dd></div><div><dt>{t('승인 기한', 'Approval deadline')}</dt><dd>{new Date(account.expiresAt).toLocaleString(locale === "ko" ? "ko-KR" : "en-US")}</dd></div></dl>
