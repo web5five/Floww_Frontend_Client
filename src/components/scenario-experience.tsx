@@ -24,6 +24,7 @@ const defaultGoal = "이미 처방받은 의약품 1팩 구매";
 const initialDraft: Draft = { goal: defaultGoal, budget: "60", deadline: "" };
 const taskKey = (owner: string, scenario: ScenarioId) => `floww-scenario-intent:${owner.toLowerCase()}:${scenario}`;
 const decisionKey = (owner: string, id: string) => `floww-scenario-decision:${owner.toLowerCase()}:${id}`;
+const quoteRequestKey = (owner: string, id: string) => `floww-scenario-quote-request:${owner.toLowerCase()}:${id}`;
 const activeScenarioKey = (owner: string) => `floww-active-scenario:${owner.toLowerCase()}`;
 const stopKey = (id: string) => `floww-task-stop:${id}`;
 function languageCommand(input: string): "ko" | "en" | null {
@@ -40,6 +41,8 @@ const scenarioMessages: Record<string, string> = {
   "구매 목적과 미래 기한을 확인하세요.": "Check the purchase goal and set a future deadline.",
   "이전 구매 조건 검사 요청을 확인하고 있습니다. 중복 요청은 보내지 않습니다.": "Checking the earlier condition request. No duplicate request will be sent.",
   "이 작업의 현재 견적을 확인하지 못했습니다.": "Current quotes for this Task could not be confirmed.",
+  "이 작업의 구매 기한이 지났습니다. 견적을 다시 요청하지 않습니다.": "This Task's purchase deadline has passed. Quotes will not be requested again.",
+  "이전 견적 요청 결과를 확인하세요. 같은 작업에서 직접 다시 확인할 수 있습니다.": "Check the earlier quote request result. You can explicitly check quotes for this Task again.",
   "선택한 약국의 견적을 하나로 확인하지 못했습니다. 구매 검사를 진행하지 않습니다.": "A unique quote from the selected pharmacy could not be confirmed. The purchase check will not proceed.",
   "구매 조건 검사 결과가 아직 기록되지 않았습니다. 같은 요청을 다시 보내지 않습니다.": "The condition check has not been recorded yet. The same request will not be sent again.",
   "요청 결과를 확인하지 못했습니다.": "The request result could not be confirmed.",
@@ -125,6 +128,7 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
   const [chatInput, setChatInput] = useState(""), [chatFeedback, setChatFeedback] = useState<"language" | "unsupported" | null>(null);
   const generationRef = useRef(0), ownerRef = useRef(owner), scenarioRef = useRef<ScenarioId | null>(scenario);
   const taskIdRef = useRef<string | null>(initialTaskId ?? null), busyRef = useRef(false), stopRef = useRef(false);
+  const readInFlightRef = useRef<{ key: string; promise: Promise<TaskView | null> } | null>(null);
   const bootRef = useRef("");
   useLayoutEffect(() => { ownerRef.current = owner; }, [owner]);
   const attempt = task ? latestAttempt(task) : undefined;
@@ -134,7 +138,10 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
     && ownerRef.current === scope.owner && scenarioRef.current === scope.scenario
     && (id === undefined || taskIdRef.current === id), []);
   const snapshot = (): Scope => ({ generation: generationRef.current, owner: ownerRef.current, scenario: scenarioRef.current });
-  const readTask = useCallback(async (scope: Scope, id: string): Promise<TaskView | null> => {
+  const readTask = useCallback((scope: Scope, id: string): Promise<TaskView | null> => {
+    const key = `${scope.generation}:${scope.owner}:${scope.scenario}:${id}`;
+    if (readInFlightRef.current?.key === key) return readInFlightRef.current.promise;
+    const promise = (async (): Promise<TaskView | null> => {
     const [next, first] = await Promise.all([tasks.get(id), tasks.events(id, 0)]);
     if (!current(scope, id)) return null;
     const collected = [...first.events]; let cursor = first.nextCursor, more = first.hasMore;
@@ -149,8 +156,13 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
     if (more) setNotice("더 오래된 기록은 관리자 감사 화면에서 확인하세요.");
     if (sessionStorage.getItem(stopKey(id))) { stopRef.current = true; setStopped(true); }
     return next;
+    })();
+    readInFlightRef.current = { key, promise };
+    const clear = () => { if (readInFlightRef.current?.promise === promise) readInFlightRef.current = null; };
+    void promise.then(clear, clear);
+    return promise;
   }, [current]);
-  const journey = useCallback(async (scope: Scope, givenId?: string, evaluate = true) => {
+  const journey = useCallback(async (scope: Scope, givenId?: string, evaluate = true, quoteRetry = false) => {
     if (busyRef.current || stopRef.current || !scope.owner || !scope.scenario || !current(scope)) return;
     busyRef.current = true; setBusy(true); setError(""); setNotice("");
     const selected = scenarios[scope.scenario];
@@ -183,11 +195,16 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
         return;
       }
       if (latest.attempts.length || latest.status !== "AWAITING_APPROVAL") { setPhase(observedPhase(scope.owner, latest)); return; }
+      if (Date.parse(latest.mandate.expiresAt) <= Date.now()) { setPhase("closed"); setError("이 작업의 구매 기한이 지났습니다. 견적을 다시 요청하지 않습니다."); return; }
       if (intent?.taskId !== id) { setPhase("pending"); return; }
       if (sessionStorage.getItem(decisionKey(scope.owner, id))) {
         setPhase("unknown"); setNotice("이전 구매 조건 검사 요청을 확인하고 있습니다. 중복 요청은 보내지 않습니다."); return;
       }
+      if (sessionStorage.getItem(quoteRequestKey(scope.owner, id)) && !quoteRetry) {
+        setPhase("unknown"); setNotice("이전 견적 요청 결과를 확인하세요. 같은 작업에서 직접 다시 확인할 수 있습니다."); return;
+      }
       setPhase("quotes");
+      sessionStorage.setItem(quoteRequestKey(scope.owner, id), new Date().toISOString());
       const collection = await tasks.quotes(id);
       if (!current(scope, id) || stopRef.current) return;
       if (collection.mandateVersion !== latest.mandate.version || !collection.quotes.length) throw new Error("이 작업의 현재 견적을 확인하지 못했습니다.");
@@ -256,7 +273,7 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
   }, [owner, initialTaskId, initialScenario, step, current, readTask, journey]);
 
   useEffect(() => {
-    if (!task?.taskId || stopped || terminal.includes(task.status)) return;
+    if (!task?.taskId || stopped || terminal.includes(task.status) || latestAttempt(task)?.policy.decision === "DENY") return;
     const id = task.taskId;
     const scope: Scope = { generation: generationRef.current, owner, scenario: scenarioRef.current };
     const timer = window.setInterval(() => {
@@ -264,7 +281,7 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
       void readTask(scope, id).then(value => { if (value && current(scope, id) && !busyRef.current) setPhase(observedPhase(scope.owner, value)); }).catch(() => { /* The visible refresh action remains available. */ });
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [task?.taskId, task?.status, stopped, owner, current, readTask]);
+  }, [task, stopped, owner, current, readTask]);
 
   function choose(id: ScenarioId) {
     if (busyRef.current) return;
@@ -349,7 +366,7 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
         {chat && task && !attempt && phase === "pending" && !busy && task.status === "AWAITING_APPROVAL" && <div className="scenario-chat-choice"><p>{t('이 작업에서 어떤 경우를 확인할까요?', 'Which case should this Task check?')}</p><div className="api-actions">{scenarioIds.map(id => <button key={id} className="button secondary" onClick={() => continueInChat(id)}>{scenarioTitle(id, locale)}</button>)}</div></div>}
         {task && <><div className="scenario-facts"><div><ShieldCheck size={19} /><span>{t('구매 목적', 'Purchase goal')}</span><strong>{task.goal === defaultGoal ? t(defaultGoal, "Buy one pack of previously prescribed medicine") : task.goal}</strong></div><div><Wallet size={19} /><span>{t('전체 한도', 'Total limit')}</span><strong>{formatFusdc(task.mandate.maxAmountBaseUnits)}</strong></div><div><Clock3 size={19} /><span>{t('기한', 'Deadline')}</span><strong>{new Date(task.mandate.expiresAt).toLocaleString(dateLocale)}</strong></div><div><span>{t('판매처', 'Merchant')}</span><strong>{(activeQuote ? displayMerchant(activeQuote.merchantId, activeQuote.merchantName, locale) : attempt ? merchantLabel(attempt.merchantId, locale) : t("견적 확인 중", "Checking quotes"))}</strong></div></div><p className={`scenario-result ${attempt?.policy.decision === "DENY" ? "denied" : ""}`} role="status">{resultLabel(task, locale)}</p></>}
         {chat && <ol className="scenario-steps" aria-label={t("진행 단계", "Progress steps")}><li className={task ? "done" : phase === "creating" ? "current" : ""}>{t('요청 저장', 'Save request')}</li><li className={quotes.length || !!attempt ? "done" : phase === "quotes" ? "current" : ""}>{t('약국 견적 확인', 'Check pharmacy quotes')}</li><li className={attempt ? "done" : phase === "checking" ? "current" : ""}>{t('구매 조건 확인', 'Check purchase conditions')}</li><li className={task?.status === "COMPLETED" ? "done" : task && canExecute(task) ? "current" : ""}>{t('승인과 결과', 'Approval and result')}</li></ol>}
-        <div className="api-actions"><button className="button secondary" onClick={() => void refresh()} disabled={!task || busy}>{t('상태 다시 확인', 'Refresh status')}</button>{task && !stopped && !attempt && phase === "error" && scenario && <button className="button primary" onClick={() => void journey(snapshot(), task.taskId)}>{t('이 작업 계속 확인', 'Continue checking this Task')}</button>}{task && !terminal.includes(task.status) && <button className="button danger" onClick={() => void stop()} disabled={stopped}>{t('작업 중단', 'Stop Task')}</button>}</div>
+        <div className="api-actions"><button className="button secondary" onClick={() => void refresh()} disabled={!task || busy}>{t('상태 다시 확인', 'Refresh status')}</button>{task && !stopped && !attempt && scenario && task.status === "AWAITING_APPROVAL" && sessionStorage.getItem(quoteRequestKey(owner, task.taskId)) && !sessionStorage.getItem(decisionKey(owner, task.taskId)) && <button className="button primary" disabled={busy} onClick={() => void journey(snapshot(), task.taskId, true, true)}>{t('같은 작업의 견적 다시 확인', 'Check quotes for this Task again')}</button>}{task && !stopped && !attempt && phase === "error" && scenario && !sessionStorage.getItem(quoteRequestKey(owner, task.taskId)) && <button className="button primary" onClick={() => void journey(snapshot(), task.taskId)}>{t('이 작업 계속 확인', 'Continue checking this Task')}</button>}{task && !terminal.includes(task.status) && <button className="button danger" onClick={() => void stop()} disabled={stopped}>{t('작업 중단', 'Stop Task')}</button>}</div>
         {task && canExecute(task) && !stopped && (chat || step === "approval") && <div className="scenario-execution"><h3>{t('선택한 구매 승인', 'Approve selected purchase')}</h3><p>{t('선택 견적과 수취인을 확인한 뒤 지갑 요청을 직접 승인하세요.', 'Review the selected quote and recipient, then approve the wallet request yourself.')}</p><TaskExecution key={task.taskId} task={task} stopped={stopped} isStopped={() => stopRef.current} onTask={next => { if (next.taskId === task.taskId && current(executionScope, task.taskId) && !stopRef.current) { setTask(next); setPhase(observedPhase(executionScope.owner, next)); } }} /></div>}
         {task && step === "mandate" && <Link className="button primary" href={journeyHref("decision")}>{t("구매 조건 확인하기", "Check purchase conditions")} <ArrowRight size={17} /></Link>}
         {task && step === "decision" && attempt && <Link className="button primary" href={journeyHref(attempt.policy.decision === "ALLOW" ? "approval" : "result")}>{attempt.policy.decision === "ALLOW" ? t("지갑 승인 화면", "Wallet approval page") : t("차단 결과 확인", "View blocked result")} <ArrowRight size={17} /></Link>}
