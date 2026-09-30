@@ -16,13 +16,13 @@ test("language choice persists through reload and keeps the shell in one languag
   expect(await response.text()).toMatch(/<html[^>]*lang="en"/);
 
   await page.getByRole("navigation", { name: "Main menu" }).getByRole("link", { name: "Overview", exact: true }).click();
-  await expect(page.getByRole("heading", { name: /Three clicks/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Buy with clarity/ })).toBeVisible();
   expect(await page.locator("body").innerText()).not.toMatch(/[가-힣]/);
   await page.getByRole("button", { name: "Switch to Korean" }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "ko");
   await expect(page.getByRole("navigation", { name: "메인 메뉴" }).getByRole("link", { name: "구매 시나리오" })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { level: 1, name: /세 번 누르면/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /명확하게 구매하고/ })).toBeVisible();
 });
 
 test("English wallet login keeps the product return path and translated dialog", async ({ page }) => {

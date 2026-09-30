@@ -1,14 +1,16 @@
-main.shell { max-width:960px; padding-top:44px; padding-bottom:80px; }
+main.shell { max-width:960px; padding-top:44px; padding-bottom:80px; font-weight:700; }
+main.shell * { font-weight:700; }
 .intro { margin-bottom:28px; }
-.intro h1 { font-size:clamp(36px,5vw,56px); letter-spacing:-2px; line-height:1.2; margin:18px 0; }
+.flowwLabel { color:#4261ff!important; font-weight:900!important; }
+.intro h1 { font-size:clamp(36px,5vw,56px); font-weight:900; letter-spacing:-2px; line-height:1.2; margin:18px 0; }
 .intro h1 span { color:#4261ff; }
 .intro p,.mainStep p,.description,.boundary { color:#475569; font-size:16px; line-height:1.75; }
 .panel { border:1px solid #e0e7fb; border-radius:28px; background:#fff; box-shadow:0 18px 50px #263ea012; padding:32px; margin-bottom:25px; }
 .progress { display:flex; gap:12px; flex-wrap:wrap; padding-bottom:25px; border-bottom:1px solid #e8ebf3; }
 .progress span { border-radius:99px; background:#f3f5fa; color:#64748b; padding:9px 14px; font-size:14px; font-weight:700; }
 .progress .active { background:#eaf0ff; color:#314ad7; }.progress .done { background:#e6f6ee; color:#226d50; }
-.mainStep { padding:30px 0 10px; }.mainStep h2 { font-size:26px; margin:0 0 10px; }.mainStep p { max-width:620px; }
-.mainStep>.button { margin-top:15px; }.hint { font-size:14px!important; color:#526078!important; }
+.mainStep { padding:30px 0 10px; }.mainStep h2 { font-size:26px; font-weight:900; margin:0 0 10px; }.mainStep p { max-width:620px; }
+.mainStep > :global(.button) { margin:18px 0 24px; }.hint { margin-top:0; font-size:15px!important; color:#46536b!important; }
 .connected { display:flex; align-items:center; gap:12px; margin-bottom:25px; }.connected>span { width:42px; height:42px; border-radius:50%; display:grid; place-items:center; color:#226d50; background:#e6f6ee; }.connected strong,.connected small { display:block; }.connected small { color:#475569; font-size:14px; margin-top:3px; overflow-wrap:anywhere; }
 .actions { display:flex; flex-wrap:wrap; gap:18px; margin-top:22px; }.textButton { border:0; background:none; padding:8px 0; color:#344fd8; font-size:14px; font-weight:700; text-align:left; }
 .notice,.alert { padding:12px 15px; border-radius:12px; background:#eef3ff; color:#303c70!important; font-size:14px!important; overflow-wrap:anywhere; }.alert { background:#fff1ef; color:#a33b34!important; }
@@ -16,4 +18,5 @@ main.shell { max-width:960px; padding-top:44px; padding-bottom:80px; }
 .dialog { position:fixed; inset:0; margin:auto; width:min(520px,calc(100vw - 24px)); max-height:min(780px,calc(100dvh - 24px)); border:1px solid #dce4f7; border-radius:28px; padding:28px; background:#fff; color:#202126; box-shadow:0 28px 80px #16277555; overflow:auto; overscroll-behavior:contain; }.dialog::backdrop { background:#15235099; }.dialogTop { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }.back,.close { display:inline-flex; align-items:center; justify-content:center; min-height:44px; background:none; border:0; color:#4052a1; font-weight:700; padding:5px; }.close { min-width:44px; font-size:28px; line-height:1; }.kicker { color:#4261ff; font-size:14px; letter-spacing:1.5px; font-weight:700; }.dialog h2 { font-size:28px; margin:8px 0 10px; }.dialog .description { margin:12px 0 20px; }.providerList { display:grid; gap:10px; margin:24px 0 12px; }.provider { display:flex; align-items:center; gap:14px; width:100%; min-height:72px; padding:13px; border:1px solid #e0e6f5; border-radius:16px; background:#fff; text-align:left; color:#202126; }.provider:hover { border-color:#4261ff; background:#f7f9ff; }.providerMark { display:grid; place-items:center; width:43px; height:43px; flex:none; border-radius:12px; color:#354ae9; background:#edf1ff; font-weight:900; font-size:20px; }.provider strong,.provider small { display:block; overflow-wrap:anywhere; }.provider small { margin-top:3px; color:#526078; font-size:14px; }.provider>span:last-child { margin-left:auto; color:#4261ff; }.tabs { display:grid; grid-template-columns:1fr 1fr; gap:5px; padding:5px; border-radius:14px; background:#eef1f8; margin:24px 0 18px; }.tabs button { border:0; border-radius:10px; background:transparent; padding:12px; color:#475569; font-weight:700; }.tabs button[aria-selected="true"] { background:white; color:#314ad7; box-shadow:0 2px 10px #17287c17; }.dialog .button { margin:6px 9px 6px 0; }.boundary { border-top:1px solid #e8ebf3; padding-top:18px; margin-top:24px; font-size:14px; }
 .emailLabel { display:block; font-weight:700; margin:16px 0 8px; }
 .emailInput { display:block; width:100%; min-height:48px; padding:11px 14px; border:1px solid #bfc9e1; border-radius:12px; font:inherit; margin-bottom:14px; }
+main.shell :where(p, small, summary, dt, dd) { color:#202938; font-weight:700; }
 @media(max-width:600px) { main.shell { padding-top:24px; padding-bottom:48px; }.panel { padding:22px; }.progress { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }.progress span { padding:9px 4px; text-align:center; font-size:12px; white-space:nowrap; }.mainStep h2 { font-size:23px; }.dialog { width:calc(100vw - 20px); max-height:calc(100dvh - 20px); padding:20px; border-radius:22px; }.dialog .button { width:100%; margin:6px 0; }.details dl div { display:block; }.details dd { text-align:left; } }

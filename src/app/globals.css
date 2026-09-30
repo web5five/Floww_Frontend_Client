@@ -5,13 +5,14 @@
   --color-background: #f7f9ff;
   --font-sans: Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
-:root { --ink:#202126; --muted:#475569; --blue:#4261ff; --background:#f7f9ff; }
+:root { --ink:#171a22; --muted:#202938; --blue:#4261ff; --background:#f7f9ff; }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
-body { margin:0; color:var(--ink); background:var(--background); font-family:Arial,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; -webkit-font-smoothing:antialiased; }
+body { margin:0; color:var(--ink); background:var(--background); font-family:Arial,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; font-weight:700; -webkit-font-smoothing:antialiased; }
 a { text-decoration:none; }
 button, a { -webkit-tap-highlight-color:transparent; }
-button { font:inherit; cursor:pointer; }
+button, input, textarea, select { font:inherit; font-weight:inherit; }
+button { cursor:pointer; }
 button:disabled { opacity:.5; cursor:wait; }
 :focus-visible { outline:3px solid #233bcc; outline-offset:5px; }
 .skip-link { position:fixed; top:-80px; left:20px; padding:15px; background:white; z-index:50; }

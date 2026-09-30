@@ -26,7 +26,7 @@ test("signed-out scenario chat and voice routes require login without Task mutat
 test("Overview presents the judge demo console but keeps execution behind login", async ({ page }) => {
   await page.route("**/api/wallet-auth/*", route => route.fulfill({ json:{enabled:false} }));
   await page.goto("/");
-  await expect(page.getByRole("heading",{name:/세 번 누르면/})).toBeVisible();
+  await expect(page.getByRole("heading",{name:/명확하게 구매하고/})).toBeVisible();
   await expect(page.getByRole("button",{name:/정상 구매/})).toBeVisible();
   await expect(page.getByRole("button",{name:/예산 초과 차단/})).toBeVisible();
   await expect(page.getByRole("button",{name:/수취인 위반 차단/})).toBeVisible();
