@@ -30,6 +30,9 @@ assert.match(connectionMessage(new DOMException('denied','NotAllowedError')),/�
 assert.match(connectionMessage(new Error('THROTTLED')),/잠시 기다린/);
 assert.match(connectionMessage(new Error('CONNECT')),/다시 시도/);
 assert.match(connectionMessage(new Error('TASK')),/작업/);
+assert.match(connectionMessage(new DOMException('denied','NotAllowedError'), 'en'),/microphone access/i);
+assert.match(connectionMessage(new Error('THROTTLED'), 'en'),/wait a moment/i);
+assert.match(connectionMessage(new Error('TASK'), 'en'),/task/i);
 const taskId = '11111111-1111-4111-8111-111111111111';
 const owner = `0x${'1'.repeat(40)}`;
 const session = {identity:{address:owner},chainId:'11155111',expiresAt:new Date(Date.now()+60000).toISOString()};

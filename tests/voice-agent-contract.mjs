@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { sealSession } from '../src/lib/auth/team-session.ts';
 import { createVoiceSession } from '../src/lib/voice/session-server.ts';
-import { scenarioFromTool } from '../src/lib/voice/contract.ts';
+import { localeFromTool, scenarioFromTool } from '../src/lib/voice/contract.ts';
 
 const origin = 'http://localhost:3201';
 const taskId = '1161d931-cbbd-4ff4-96e1-8b6fc22f274d';
@@ -18,6 +18,7 @@ process.env.OPENAI_API_KEY = 'fixture-key-never-sent-to-browser';
 process.env.FLOWW_API_BASE_URL = 'http://127.0.0.1:9000/';
 const cookie = 'floww_wallet_session=' + sealSession({ userId: ownerId, accessToken: token, identity: { namespace: 'eip155', address }, chainId: '11155111', expiresAt: new Date(Date.now() + 600000).toISOString() });
 let calls = [], backendOwner = ownerId, backendTask = taskId, backendStatus = 'ACTIVE';
+let expectedLanguage = 'Korean';
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (url, options) => {
   calls.push({ url: String(url), options });
@@ -34,9 +35,15 @@ globalThis.fetch = async (url, options) => {
   assert.equal(options.body.get('sdp'), sdp);
   assert.equal(session.model, 'gpt-realtime-mini');
   assert.equal(session.max_output_tokens, 512);
-  assert.equal(session.tools.length, 1);
+  assert.ok(session.instructions.includes(`exclusively in ${expectedLanguage}`));
+  assert.ok(session.instructions.includes('Do not switch language merely because'));
+  assert.ok(session.instructions.includes('Only when the user explicitly asks'));
+  assert.equal(session.tools.length, 2);
   assert.deepEqual(session.tools[0].parameters.properties.intent.enum, ['permitted', 'over-budget', 'recipient']);
-  assert.ok(session.instructions.includes('ACTIVE'));
+  assert.equal(session.tools[1].name, 'set_language');
+  assert.deepEqual(session.tools[1].parameters.properties.locale.enum, ['ko', 'en']);
+  assert.equal(session.tools[1].parameters.additionalProperties, false);
+  assert.ok(session.instructions.includes(expectedLanguage === 'Korean' ? 'ACTIVE' : 'No task was checked'));
   for (const forbidden of [token, address, 'private prescription', '100000000', 'fixture-key-never']) assert.equal(JSON.stringify(session).includes(forbidden), false);
   return new Response(sdp, { status: 201, headers: { 'Content-Type': 'application/sdp' } });
 };
@@ -46,6 +53,9 @@ try {
   assert.equal((await createVoiceSession(request(sdp, {requestCookie:''}))).status,401);
   assert.equal((await createVoiceSession(request(sdp, {type:'text/plain'}))).status,415);
   assert.equal((await createVoiceSession(request(sdp, {query:'?model=arbitrary'}))).status,400);
+  for (const query of ['?locale=fr', '?locale=KO', '?locale=', '?locale=ko&locale=en', '?taskId='+taskId+'&locale=fr']) {
+    assert.equal((await createVoiceSession(request(sdp, {query}))).status,400);
+  }
   assert.equal((await createVoiceSession(request(sdp.repeat(400)))).status,413);
   const chunks = new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode(sdp)); controller.enqueue(new Uint8Array(17000)); controller.close(); } });
   const chunked = new Request(`${origin}/api/voice/session`, { method:'POST', headers:{Host:'localhost:3201',Origin:origin,Cookie:cookie,'Content-Type':'application/sdp'}, body:chunks, duplex:'half' });
@@ -64,13 +74,22 @@ try {
   assert.equal((await createVoiceSession(request(sdp, {query:`?taskId=${taskId}`}))).status,429);
   assert.equal(calls.filter(call => call.url.includes('openai')).length,1);
   const otherCookie = 'floww_wallet_session=' + sealSession({ userId: 'dd61d931-cbbd-4ff4-96e1-8b6fc22f274d', accessToken: token, identity: { namespace: 'eip155', address }, chainId: '11155111', expiresAt: new Date(Date.now() + 600000).toISOString() });
+  expectedLanguage = 'English';
+  const english = await createVoiceSession(request(sdp, { requestCookie: otherCookie, query: '?locale=en' }));
+  assert.equal(english.status,201);
+  assert.equal(await english.text(),sdp);
+  expectedLanguage = 'Korean';
+  const timeoutCookie = 'floww_wallet_session=' + sealSession({ userId: 'ee61d931-cbbd-4ff4-96e1-8b6fc22f274d', accessToken: token, identity: { namespace: 'eip155', address }, chainId: '11155111', expiresAt: new Date(Date.now() + 600000).toISOString() });
   globalThis.fetch = (_url, options) => new Promise((_resolve, reject) => {
     const keepAlive = setTimeout(() => reject(new Error('missing timeout')), 14000);
     options.signal.addEventListener('abort', () => { clearTimeout(keepAlive); reject(new Error('timeout')); }, { once: true });
   });
-  assert.equal((await createVoiceSession(request(sdp, { requestCookie: otherCookie }))).status,502);
+  assert.equal((await createVoiceSession(request(sdp, { requestCookie: timeoutCookie }))).status,502);
   assert.equal(scenarioFromTool({intent:'permitted'}),'permitted');
   assert.equal(scenarioFromTool({intent:'recipient'}),'recipient');
   for (const invalid of [{intent:'approve'}, {intent:'permitted',maxAmount:1}, {}, null, 'permitted']) assert.equal(scenarioFromTool(invalid),null);
-  console.log('Voice auth, origin, body, owner context, secret exclusion, throttle and tool allowlist passed');
+  assert.equal(localeFromTool({locale:'ko'}),'ko');
+  assert.equal(localeFromTool({locale:'en'}),'en');
+  for (const invalid of [{locale:'fr'}, {locale:'EN'}, {locale:'en',taskId}, {}, null, 'en']) assert.equal(localeFromTool(invalid),null);
+  console.log('Voice auth, origin, body, owner context, locale, secret exclusion, throttle and tool allowlist passed');
 } finally { globalThis.fetch = originalFetch; }

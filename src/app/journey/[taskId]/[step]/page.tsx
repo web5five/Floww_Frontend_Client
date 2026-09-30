@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { LOCALE_COOKIE } from "@/lib/locale-config";
 import { notFound } from "next/navigation";
 import { ScenarioExperience, type JourneyStep } from "@/components/scenario-experience";
 
 const steps: JourneyStep[] = ["mandate", "decision", "approval", "result"];
-export const metadata: Metadata = { title: "구매 진행" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await cookies()).get(LOCALE_COOKIE)?.value === "en" ? "Purchase progress" : "구매 진행" };
+}
 
 export default async function JourneyPage({ params, searchParams }: {
   params: Promise<{ taskId: string; step: string }>;

@@ -26,7 +26,7 @@ test("signed-out scenario chat and voice routes require login without Task mutat
 test("Overview introduces the process but keeps executable scenarios behind login", async ({ page }) => {
   await page.route("**/api/wallet-auth/*", route => route.fulfill({ json:{enabled:false} }));
   await page.goto("/");
-  await expect(page.getByRole("heading",{name:/Buy with/})).toBeVisible();
+  await expect(page.getByRole("heading",{level:1,name:/명확하게/})).toBeVisible();
   await expect(page.getByRole("heading",{name:"한 번의 요청, 눈에 보이는 과정."})).toBeVisible();
   await expect(page.locator("a[href*='scenario=']")).toHaveCount(0);
   await expect(page.locator(".wordmark img").first()).toHaveAttribute("src","/brand/floww-mark.svg");

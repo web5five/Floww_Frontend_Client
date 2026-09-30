@@ -59,7 +59,10 @@ async function taskSummary(taskId: string, userId: string, token: string): Promi
 export async function createVoiceSession(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const ids = url.searchParams.getAll("taskId");
-  if ([...url.searchParams.keys()].some(key => key !== "taskId") || ids.length > 1 || (ids.length === 1 && !uuid.test(ids[0]))) return fail("INVALID_INPUT", 400);
+  const locales = url.searchParams.getAll("locale");
+  if ([...url.searchParams.keys()].some(key => key !== "taskId" && key !== "locale") || ids.length > 1 || (ids.length === 1 && !uuid.test(ids[0])) ||
+    locales.length > 1 || (locales.length === 1 && locales[0] !== "ko" && locales[0] !== "en")) return fail("INVALID_INPUT", 400);
+  const locale = locales[0] ?? "ko";
   try {
     const originValue = request.headers.get("origin") ?? "";
     const origin = new URL(originValue);
@@ -95,9 +98,12 @@ export async function createVoiceSession(request: Request): Promise<Response> {
   const form = new FormData();
   form.set("sdp", sdp);
   form.set("session", JSON.stringify({ type: "realtime", model, max_output_tokens: 512,
-    instructions: `You are Floww's voice assistant. Speak briefly in Korean or English, matching the user. You converse and narrate only. ${context} Floww's server and Kiln proposal plus deterministic policy and Task Account control purchases. Never claim you approved, signed, paid, ordered or completed anything from this conversation. Never suggest changing a budget, recipient or deadline. Give no medical advice or prescription substitution. For a scenario request, call request_scenario with exactly one allowed intent; the user must confirm on screen.`,
+    instructions: `You are Floww's voice assistant. Speak briefly and exclusively in ${locale === "ko" ? "Korean" : "English"}, the selected interface language. Do not switch language merely because the user's speech uses another language. Only when the user explicitly asks to change the interface language or translate this conversation into Korean or English, call set_language with exactly that target locale. That call ends this voice session; the user must click to start a new conversation in the chosen language. You converse and narrate only. ${context} Floww's server and Kiln proposal plus deterministic policy and Task Account control purchases. Never claim you approved, signed, paid, ordered or completed anything from this conversation. Never suggest changing a budget, recipient or deadline. Give no medical advice or prescription substitution. For a scenario request, call request_scenario with exactly one allowed intent; the user must confirm on screen.`,
     audio: { input: { transcription: { model: "gpt-4o-mini-transcribe" } }, output: { voice: "marin" } },
-    tools: [{ type: "function", name: "request_scenario", description: "Ask the Floww UI to show one of three fixed scenario intents for visible user confirmation. No purchase or approval occurs.", parameters: { type: "object", properties: { intent: { type: "string", enum: ["permitted", "over-budget", "recipient"] } }, required: ["intent"], additionalProperties: false } }], tool_choice: "auto" }));
+    tools: [
+      { type: "function", name: "request_scenario", description: "Ask the Floww UI to show one of three fixed scenario intents for visible user confirmation. No purchase or approval occurs.", parameters: { type: "object", properties: { intent: { type: "string", enum: ["permitted", "over-budget", "recipient"] } }, required: ["intent"], additionalProperties: false } },
+      { type: "function", name: "set_language", description: "Only when the user explicitly asks to change or translate this conversation to Korean or English, set the Floww interface language. This ends the current voice session. Does not alter Task content or approve an action.", parameters: { type: "object", properties: { locale: { type: "string", enum: ["ko", "en"] } }, required: ["locale"], additionalProperties: false } },
+    ], tool_choice: "auto" }));
   try {
     const result = await fetch("https://api.openai.com/v1/realtime/calls", { method: "POST", headers: { Authorization: `Bearer ${key}`, "OpenAI-Safety-Identifier": bucket }, body: form,
       cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(12000)]) });

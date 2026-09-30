@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { canExecute, chatMessages, quoteForScenario, resultLabel } from "../src/lib/scenario-presentation";
+import { canExecute, chatMessages, phaseLabel, quoteForScenario, resultLabel, statusLabel } from "../src/lib/scenario-presentation";
 import type { TaskEvent, TaskQuote, TaskView } from "../src/lib/api/task-types";
 
 const owner = "0x1111111111111111111111111111111111111111";
@@ -34,6 +34,10 @@ test("presentation maps persisted facts to readable bubbles and gates stale auth
   const task = makeTask(1); task.attempts = [attemptFor(task, quotes[1])];
   expect(canExecute(task)).toBe(false);
   expect(resultLabel(task)).toContain("예산 초과");
+  expect(resultLabel(task, "en")).toContain("Budget exceeded");
+  expect(resultLabel(task, "en")).not.toContain("예산 초과");
+  expect(phaseLabel("unknown", "en")).toBe("Server result needs checking");
+  expect(statusLabel("DENY", "ko")).toBe("차단");
   const messages = chatMessages(task, [{ seq: 1, kind: "POLICY_DECIDED", state: task.status, reasonCode: "BUDGET_EXCEEDED", actor: "server", createdAt: task.updatedAt }], quotes);
   expect(messages[0].role).toBe("user"); expect(messages.at(-1)?.body).toContain("약국 B");
   expect(messages.some(message => message.body.includes("POLICY_DECIDED"))).toBe(false);

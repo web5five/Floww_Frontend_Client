@@ -7,7 +7,7 @@ test("overview leads through login before showing three scenario choices", async
   const session = {identity:{namespace:"eip155",address:"0x1111111111111111111111111111111111111111"},chainId:"11155111",expiresAt:new Date(Date.now()+3600000).toISOString()};
   await page.route("**/api/wallet-auth/*", route => route.fulfill({json:route.request().url().endsWith("config") ? {enabled:true,mode:"team-jwt"} : signedIn ? session : null}));
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /Buy with clarity/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /명확하게/ })).toBeVisible();
   await expect(page.locator(".site-header .header-login")).toBeVisible();
   if (testInfo.project.name === "mobile") {
     const logo = await page.getByRole("link", {name:"Floww 홈",exact:true}).boundingBox();
