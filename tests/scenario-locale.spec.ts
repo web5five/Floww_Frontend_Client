@@ -76,6 +76,7 @@ test("header, chat, and settings language controls keep one authenticated Task",
   expect(task).toBe(savedTask);
   expect(task!.mandate.maxAmountBaseUnits).toBe(savedAmount);
   expect(task!.mandate.expiresAt).toBe(savedDeadline);
+  expect(await page.locator("body").innerText()).not.toMatch(/[가-힣]/);
   await page.screenshot({ path: `artifacts/f036b2-chat-${testInfo.project.name}.png`, fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   if (testInfo.project.name === "mobile") {
@@ -95,6 +96,20 @@ test("header, chat, and settings language controls keep one authenticated Task",
   await expect(page.locator("html")).toHaveAttribute("lang", "ko");
   await expect(page).toHaveTitle(/작업 대화/);
   await expect(page.locator(".chat-messages .user")).toContainText("구매 요청");
+  await expect(page.getByRole("button", { name: "지갑 계정" })).toBeVisible();
+  await expect(page.locator('.chat-voice-entry button[aria-controls="floww-voice-panel"]')).toBeVisible();
+  if (testInfo.project.name === "mobile") {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await expect(page.locator('.chat-voice-entry button[aria-controls="floww-voice-panel"]')).toBeVisible();
+  }
+  await page.screenshot({ path: `artifacts/f036-integration-chat-ko-${testInfo.project.name}.png`, fullPage: true });
+  if (testInfo.project.name === "mobile") {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await expect(page.getByRole("button", { name: "지갑 계정" })).toBeVisible();
+    await page.screenshot({ path: "artifacts/f036-integration-chat-ko-mobile-320.png", fullPage: true });
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(posts).toEqual(["/api/tasks"]);
   expect(writes).toEqual(writesAfterCreation);
   expect(task!.mandate.maxAmountBaseUnits).toBe(savedAmount);
