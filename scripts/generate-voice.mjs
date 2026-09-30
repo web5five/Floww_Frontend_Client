@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 try { process.loadEnvFile(".env.local"); } catch (error) { if (error.code !== "ENOENT") throw new Error("Could not read .env.local"); }
 const target = resolve("public/audio/floww-intro-ko.mp3");
 try {
+  if (process.env.FLOWW_VOICE_ENABLED !== "true") throw new Error("Voice generation is disabled. No request sent.");
   const { text } = JSON.parse(await readFile("src/lib/voice-script.json", "utf8"));
   const existing = await stat(target).catch(() => null);
   if (existing?.size) throw new Error("Audio already exists. Review it before explicitly replacing the file; no paid request was sent.");
@@ -25,7 +26,7 @@ try {
 } catch (error) {
   // Never print provider payloads, environment values, request headers or SDK errors.
   const message = error instanceof Error ? error.message : "Voice generation failed";
-  const safe = /^(Set ELEVENLABS_|Audio already|Invalid voice|ElevenLabs HTTP|Unexpected audio|Invalid audio)/.test(message);
+  const safe = /^(Voice generation is disabled|Set ELEVENLABS_|Audio already|Invalid voice|ElevenLabs HTTP|Unexpected audio|Invalid audio)/.test(message);
   console.error(safe ? message : "Voice generation failed. No automatic retry; check provider history before retrying.");
   process.exitCode = 1;
 }

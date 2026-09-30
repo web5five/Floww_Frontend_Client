@@ -83,7 +83,7 @@ test("header, chat, and settings language controls keep one authenticated Task",
     await page.setViewportSize({ width: 320, height: 800 });
     await expect(page.getByRole("textbox", { name: "Display language request" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Send request" })).toBeVisible();
-    await expect(page.locator('.chat-voice-entry button[aria-controls="floww-voice-panel"]')).toBeVisible();
+    await expect(page.locator('.chat-voice-entry button[aria-controls="floww-voice-panel"]')).toHaveCount(process.env.NEXT_PUBLIC_FLOWW_VOICE_ENABLED === "true" ? 1 : 0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: "artifacts/f036b2-chat-mobile-320.png", fullPage: true });
   }
@@ -97,11 +97,11 @@ test("header, chat, and settings language controls keep one authenticated Task",
   await expect(page).toHaveTitle(/작업 대화/);
   await expect(page.locator(".chat-messages .user")).toContainText("구매 요청");
   await expect(page.getByRole("button", { name: "지갑 계정" })).toBeVisible();
-  await expect(page.locator('.chat-voice-entry button[aria-controls="floww-voice-panel"]')).toBeVisible();
+  await expect(page.locator('.chat-voice-entry button[aria-controls="floww-voice-panel"]')).toHaveCount(process.env.NEXT_PUBLIC_FLOWW_VOICE_ENABLED === "true" ? 1 : 0);
   if (testInfo.project.name === "mobile") {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
-    await expect(page.locator('.chat-voice-entry button[aria-controls="floww-voice-panel"]')).toBeVisible();
+    await expect(page.locator('.chat-voice-entry button[aria-controls="floww-voice-panel"]')).toHaveCount(process.env.NEXT_PUBLIC_FLOWW_VOICE_ENABLED === "true" ? 1 : 0);
   }
   await page.screenshot({ path: `artifacts/f036-integration-chat-ko-${testInfo.project.name}.png`, fullPage: true });
   if (testInfo.project.name === "mobile") {

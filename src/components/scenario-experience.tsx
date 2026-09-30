@@ -11,6 +11,7 @@ import { useWallet } from "./wallet-provider";
 import { useLocale } from "@/lib/i18n";
 import { TaskExecution } from "./task-execution";
 import { AccountEvidence } from "./account-evidence";
+import { voiceUiEnabled } from "@/lib/voice/public-availability";
 import { VoiceAgentLauncher } from "./voice-agent";
 import styles from "./scenario-experience.module.css";
 
@@ -391,8 +392,8 @@ export function ScenarioExperience({ initialScenario, taskId: initialTaskId, cha
         </form>
         {chatFeedback && <p className={styles.feedback} role="status">{chatFeedback === "language"
           ? t("화면 언어를 한국어로 설정했습니다. 같은 작업을 계속 보고 있습니다.", "Display language set to English. You are viewing the same Task.")
-          : t("화면 언어는 ‘영어로 보여줘’ 또는 ‘한국어로 바꿔줘’로 요청할 수 있어요. 작업에 대해 이야기하려면 마이크를 눌러주세요.", "To change the display language, ask ‘English please’ or ‘Korean please’. To talk about this Task, use the microphone.")}</p>}
-        <div className={styles.voiceTools}><VoiceAgentLauncher key={`${owner}:${task.taskId}:${stopped}`} taskId={task.taskId} onScenarioRequest={!stopped && !busy ? voiceScenario : undefined} /><p>{t('마이크를 눌러 이 작업에 대해 이야기하세요.', 'Press the microphone to talk about this Task.')}</p><Link className="text-link" href={`/voice?taskId=${encodeURIComponent(task.taskId)}`}>{t('음성 화면 크게 열기 ↗', 'Open full voice view ↗')}</Link></div></section>}
+          : t("화면 언어는 ‘영어로 보여줘’ 또는 ‘한국어로 바꿔줘’로 요청할 수 있어요. 구매 진행과 결과는 위의 작업 기록에서 확인하세요.", "To change the display language, ask ‘English please’ or ‘Korean please’. Review purchase progress and results in the Task history above.")}</p>}
+        {voiceUiEnabled && <div className={styles.voiceTools}><VoiceAgentLauncher key={`${owner}:${task.taskId}:${stopped}`} taskId={task.taskId} onScenarioRequest={!stopped && !busy ? voiceScenario : undefined} /><p>{t('마이크를 눌러 이 작업에 대해 이야기하세요.', 'Press the microphone to talk about this Task.')}</p><Link className="text-link" href={`/voice?taskId=${encodeURIComponent(task.taskId)}`}>{t('음성 화면 크게 열기 ↗', 'Open full voice view ↗')}</Link></div>}</section>}
       <details className="card scenario-panel"><summary>{t('내 작업 다시 열기', 'Reopen my Tasks')}</summary><button className="button secondary" onClick={() => void listTasks()}>{t('내 작업 조회', 'View my Tasks')}</button><div className="api-actions">{list.map(item => <Link key={item.taskId} className="text-link" href={`/chat/${item.taskId}`}>{item.goal === defaultGoal ? t(defaultGoal, "Buy one pack of previously prescribed medicine") : item.goal} · {resultLabel(item, locale)} ↗</Link>)}</div></details>
     </>}
     {busy && <p role="status">{phaseLabel(phase, locale)} · {t("같은 요청을 중복 전송하지 않습니다.", "No duplicate request will be sent.")}</p>}{notice && <p role="status">{localizedScenarioMessage(notice, locale)}</p>}{error && <><p role="alert">{localizedScenarioMessage(error, locale)}</p>{scenarioCode(error) && <details className="studio-details"><summary>{t("진단 코드", "Diagnostic code")}</summary><code>{scenarioCode(error)}</code></details>}</>}{stopped && <p role="alert">{t('이 브라우저의 후속 실행이 잠겼습니다. 서버와 체인 상태를 별도로 확인하세요.', 'Further actions are locked in this browser. Check server and chain status separately.')}</p>}
