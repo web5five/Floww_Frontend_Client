@@ -225,6 +225,36 @@ test("actual auth hook composes Magic OTP provider, exact SIWE, BFF session and 
   } finally { await flow.close(); }
 });
 
+test("connection notice follows the actual server session without granting purchase authority", async () => {
+  const flow = await fixture();
+  try {
+    await flow.beginLogin();
+    assert.match(flow.renderProvider().notice, /로그인 전/);
+    flow.releaseChallenge();
+    await until(() => flow.renderProvider().auth.session);
+    assert.equal(flow.renderProvider().notice, "서버 로그인 완료 · 구매 및 지출은 별도 승인이 필요합니다.");
+    assert.equal(flow.events.filter(event => event === "personal_sign").length, 1);
+    assert.equal(flow.events.includes("eth_sendTransaction"), false);
+    await flow.renderProvider().auth.logout();
+    assert.equal(flow.renderProvider().auth.session, null);
+    assert.match(flow.renderProvider().notice, /로그인 전/);
+    assert.ok(flow.renderProvider().connection, "sign-out keeps the wallet connection distinct");
+  } finally { await flow.close(); }
+});
+
+test("expired server session restores the pre-login notice and keeps its warning", async () => {
+  const flow = await fixture();
+  try {
+    await flow.signIn();
+    assert.match(flow.renderProvider().notice, /서버 로그인 완료/);
+    flow.expire();
+    assert.equal(flow.renderProvider().auth.session, null);
+    assert.match(flow.renderProvider().notice, /로그인 전/);
+    assert.match(flow.renderProvider().auth.error, /expired/);
+    assert.ok(flow.renderProvider().connection);
+  } finally { await flow.close(); }
+});
+
 test("actual auth hook and provider cancel a pending post-OTP challenge without signing", async () => {
   const flow = await fixture();
   try {
