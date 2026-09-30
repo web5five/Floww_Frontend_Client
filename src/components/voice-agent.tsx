@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useWallet } from "./wallet-provider";
 import { useLocale } from "@/lib/i18n";
-import { scenarioFromTool, type ScenarioIntent } from "@/lib/voice/contract";
+import { localeFromTool, scenarioFromTool, type ScenarioIntent } from "@/lib/voice/contract";
 import { closeVoiceResources, connectionMessage, releaseVoiceResources, updateVoiceTranscript, voiceScope, type VoiceLine, type VoiceResources } from "@/lib/voice/client-session";
 import styles from "./voice-agent.module.css";
 
@@ -38,7 +38,7 @@ const intentLabels: Record<ScenarioIntent, Message> = {
 
 export function VoiceAgent({ taskId, onScenarioRequest }: { taskId?: string; onScenarioRequest?: (intent: ScenarioIntent) => void }) {
   const { auth, connection } = useWallet();
-  const { locale, t } = useLocale();
+  const { locale, setLocale, t } = useLocale();
   const sessionExpiry = auth.session?.expiresAt ?? "";
   const scope = voiceScope(auth.session, connection, taskId);
   const authorized = scope !== null;
@@ -110,7 +110,25 @@ export function VoiceAgent({ taskId, onScenarioRequest }: { taskId?: string; onS
           const item = event.item;
           if (!item || typeof item !== "object" || Array.isArray(item)) return;
           const call = item as { type?: unknown; name?: unknown; arguments?: unknown; call_id?: unknown };
-          if (call.type !== "function_call" || call.name !== "request_scenario" || typeof call.arguments !== "string" || call.arguments.length > 512) return;
+          if (call.type !== "function_call" || (call.name !== "request_scenario" && call.name !== "set_language") || typeof call.arguments !== "string" || call.arguments.length > 512) return;
+          if (call.name === "set_language") {
+            // Model output is untrusted. Accept only the exact locale shape and a provider call ID.
+            if (typeof call.call_id !== "string" || !/^[A-Za-z0-9_-]{1,127}$/.test(call.call_id)) return;
+            let requested = null;
+            try { requested = localeFromTool(JSON.parse(call.arguments)); } catch { /* invalid tool arguments */ }
+            if (requested && requested !== startedLocale) {
+              latestLocale.current = requested;
+              end(messages.languageChanged);
+              setLines([]);
+              setLocale(requested);
+              return;
+            }
+            if (channel.readyState === "open") {
+              channel.send(JSON.stringify({ type: "conversation.item.create", item: { type: "function_call_output", call_id: call.call_id, output: requested ? "This language is already selected. No action has run." : "Invalid locale. No action has run." } }));
+              channel.send(JSON.stringify({ type: "response.create" }));
+            }
+            return;
+          }
           let intent: ScenarioIntent | null = null;
           try { intent = scenarioFromTool(JSON.parse(call.arguments)); } catch { /* invalid tool arguments */ }
           if (intent) { setPending({ intent, generation, scope: startedScope }); setMessage(messages.confirm); }

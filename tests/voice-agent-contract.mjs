@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { sealSession } from '../src/lib/auth/team-session.ts';
 import { createVoiceSession } from '../src/lib/voice/session-server.ts';
-import { scenarioFromTool } from '../src/lib/voice/contract.ts';
+import { localeFromTool, scenarioFromTool } from '../src/lib/voice/contract.ts';
 
 const origin = 'http://localhost:3201';
 const taskId = '1161d931-cbbd-4ff4-96e1-8b6fc22f274d';
@@ -36,9 +36,13 @@ globalThis.fetch = async (url, options) => {
   assert.equal(session.model, 'gpt-realtime-mini');
   assert.equal(session.max_output_tokens, 512);
   assert.ok(session.instructions.includes(`exclusively in ${expectedLanguage}`));
-  assert.ok(session.instructions.includes('Do not switch language based on the user'));
-  assert.equal(session.tools.length, 1);
+  assert.ok(session.instructions.includes('Do not switch language merely because'));
+  assert.ok(session.instructions.includes('Only when the user explicitly asks'));
+  assert.equal(session.tools.length, 2);
   assert.deepEqual(session.tools[0].parameters.properties.intent.enum, ['permitted', 'over-budget', 'recipient']);
+  assert.equal(session.tools[1].name, 'set_language');
+  assert.deepEqual(session.tools[1].parameters.properties.locale.enum, ['ko', 'en']);
+  assert.equal(session.tools[1].parameters.additionalProperties, false);
   assert.ok(session.instructions.includes(expectedLanguage === 'Korean' ? 'ACTIVE' : 'No task was checked'));
   for (const forbidden of [token, address, 'private prescription', '100000000', 'fixture-key-never']) assert.equal(JSON.stringify(session).includes(forbidden), false);
   return new Response(sdp, { status: 201, headers: { 'Content-Type': 'application/sdp' } });
@@ -84,5 +88,8 @@ try {
   assert.equal(scenarioFromTool({intent:'permitted'}),'permitted');
   assert.equal(scenarioFromTool({intent:'recipient'}),'recipient');
   for (const invalid of [{intent:'approve'}, {intent:'permitted',maxAmount:1}, {}, null, 'permitted']) assert.equal(scenarioFromTool(invalid),null);
+  assert.equal(localeFromTool({locale:'ko'}),'ko');
+  assert.equal(localeFromTool({locale:'en'}),'en');
+  for (const invalid of [{locale:'fr'}, {locale:'EN'}, {locale:'en',taskId}, {}, null, 'en']) assert.equal(localeFromTool(invalid),null);
   console.log('Voice auth, origin, body, owner context, locale, secret exclusion, throttle and tool allowlist passed');
 } finally { globalThis.fetch = originalFetch; }
