@@ -116,7 +116,11 @@ test("Korean and English wallet choices stay readable with Magic unconfigured", 
       const current = await page.locator("html").getAttribute("lang");
       if (current !== locale) await page.getByRole("button", { name: locale === "en" ? "영어로 변경" : "Switch to Korean" }).click();
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
+      const progressStep = page.getByText(locale === "en" ? "1 · Connect" : "1 · 연결", { exact: true });
+      await expect(progressStep).toBeVisible();
+      expect(await progressStep.evaluate(element => element.scrollWidth <= element.clientWidth), `${locale} progress at ${width}px`).toBe(true);
       await expect(page.getByRole("banner").getByRole("button", { name: locale === "en" ? "Connect wallet" : "지갑 연결" })).toBeVisible();
+      await page.screenshot({ path: `artifacts/f037-login-progress-${locale}-${width}.png`, fullPage: true });
       await page.getByRole("button", { name: locale === "en" ? "Choose wallet" : "지갑 선택" }).click();
       const dialog = page.getByRole("dialog");
       await expect(dialog.getByRole("heading", { name: locale === "en" ? "Choose how to sign in" : "로그인 방법을 선택하세요" })).toBeVisible();
