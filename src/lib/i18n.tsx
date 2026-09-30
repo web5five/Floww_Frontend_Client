@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
+import { useRouter } from "next/navigation";
+import { LOCALE_COOKIE } from "./locale-config";
 
 export type Locale = "ko" | "en";
 
@@ -11,10 +13,10 @@ type LocaleContextValue = {
   t: (ko: string, en: string) => string;
 };
 
-export const LOCALE_COOKIE = "floww-locale";
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 export function LocaleProvider({ initialLocale, children }: { initialLocale?: Locale; children: ReactNode }) {
+  const router = useRouter();
   const [locale, updateLocale] = useState<Locale>(initialLocale ?? "ko");
   useEffect(() => { document.documentElement.lang = locale; }, [locale]);
   function setLocale(next: Locale) {
@@ -22,6 +24,7 @@ export function LocaleProvider({ initialLocale, children }: { initialLocale?: Lo
     document.cookie = `${LOCALE_COOKIE}=${next}; Path=/; Max-Age=31536000; SameSite=Lax`;
     document.documentElement.lang = next;
     updateLocale(next);
+    router.refresh();
   }
   return <LocaleContext.Provider value={{ locale, setLocale, t: (ko, en) => locale === "ko" ? ko : en }}>{children}</LocaleContext.Provider>;
 }

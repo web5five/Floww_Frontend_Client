@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 import { DemoOrderProvider } from "@/components/demo-order-provider";
 import { WalletToolkitProvider } from "@/components/wallet-toolkit-provider";
 import { Header } from "@/components/header";
-import { LOCALE_COOKIE, LocaleChrome, LocaleProvider, type Locale } from "@/lib/i18n";
+import { LocaleChrome, LocaleProvider, type Locale } from "@/lib/i18n";
+import { LOCALE_COOKIE } from "@/lib/locale-config";
 import "@rainbow-me/rainbowkit/styles.css";
 import "./globals.css";
 
