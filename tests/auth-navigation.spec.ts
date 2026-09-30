@@ -27,9 +27,9 @@ test("Overview presents the judge demo console but keeps execution behind login"
   await page.route("**/api/wallet-auth/*", route => route.fulfill({ json:{enabled:false} }));
   await page.goto("/");
   await expect(page.getByRole("heading",{name:/명확하게 구매하고/})).toBeVisible();
-  await expect(page.getByRole("button",{name:/정상 구매/})).toBeVisible();
-  await expect(page.getByRole("button",{name:/예산 초과 차단/})).toBeVisible();
-  await expect(page.getByRole("button",{name:/수취인 위반 차단/})).toBeVisible();
+  await expect(page.getByRole("button",{name:/허용된 구매/})).toBeVisible();
+  await expect(page.getByRole("button",{name:/예산 초과/})).toBeVisible();
+  await expect(page.getByRole("button",{name:/수취인 조건/})).toBeVisible();
   await expect(page.locator("a[href*='scenario=']")).toHaveCount(0);
   await expect(page.locator(".wordmark img").first()).toHaveAttribute("src","/brand/floww-mark.svg");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

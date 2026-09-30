@@ -29,10 +29,10 @@ type ScenarioId = "allowed" | "budget" | "recipient";
 
 const scenarios = {
   allowed: {
-    eyebrow: ["정상 구매", "Successful purchase"],
-    title: ["예산 안에서 가장 적합한 약국", "Best pharmacy within the budget"],
-    summary: ["Kiln 제안과 서버 정책을 확인한 뒤 사용자가 지갑에서 최종 승인합니다.", "The user reviews the Kiln proposal and server policy, then gives final wallet approval."],
-    pharmacy: "Harbor Pharmacy",
+    eyebrow: ["허용된 구매", "Permitted purchase"],
+    title: ["약국을 비교하고 선택한 구매를 승인", "Compare pharmacies and approve the selected purchase"],
+    summary: ["Kiln이 약국 후보를 제안하고 서버 정책이 검증한 뒤 사용자가 지갑에서 최종 승인합니다.", "Kiln proposes a pharmacy candidate, server policy verifies it, and the user gives final wallet approval."],
+    pharmacy: "Pharmacy A",
     amount: "23.50 fUSDC",
     decision: "ALLOW",
     reason: ["금액과 수취인이 위임 범위 안에 있습니다.", "Amount and recipient are within the mandate."],
@@ -40,10 +40,10 @@ const scenarios = {
     tone: "allow",
   },
   budget: {
-    eyebrow: ["예산 초과 차단", "Over-budget block"],
-    title: ["60 fUSDC 한도를 넘는 견적", "Quote exceeds the 60 fUSDC limit"],
+    eyebrow: ["예산 초과", "Over budget"],
+    title: ["약국 B 견적이 60 fUSDC 한도를 초과", "Pharmacy B quote exceeds the 60 fUSDC limit"],
     summary: ["정책이 서명과 브로드캐스트 전에 요청을 멈춥니다.", "Policy stops the request before signing or broadcast."],
-    pharmacy: "Central Pharmacy",
+    pharmacy: "Pharmacy B",
     amount: "64.00 fUSDC",
     decision: "DENY",
     reason: ["AMOUNT_EXCEEDS_MANDATE", "AMOUNT_EXCEEDS_MANDATE"],
@@ -51,10 +51,10 @@ const scenarios = {
     tone: "deny",
   },
   recipient: {
-    eyebrow: ["수취인 위반 차단", "Wrong-recipient block"],
-    title: ["등록되지 않은 주소로 보내는 요청", "Request targets an unregistered address"],
+    eyebrow: ["수취인 조건", "Recipient condition"],
+    title: ["약국 C 수취인이 허용되는지 확인", "Check whether Pharmacy C's recipient is permitted"],
     summary: ["서버의 판매자 주소와 다르면 거래를 만들지 않습니다.", "No transaction is created when the recipient differs from the server merchant registry."],
-    pharmacy: "Riverside Pharmacy",
+    pharmacy: "Pharmacy C",
     amount: "19.00 fUSDC",
     decision: "DENY",
     reason: ["RECIPIENT_NOT_ALLOWED", "RECIPIENT_NOT_ALLOWED"],
@@ -121,7 +121,7 @@ export function OverviewCommandCenter() {
 
             <div className={styles.requestCard}>
               <div className={styles.requestIcon}><ShoppingBag size={21} /></div>
-              <div><span>{t("공통 구매 요청", "Shared purchase request")}</span><strong>{t("아세트아미노펜 500mg · 10정", "Acetaminophen 500mg · 10 tablets")}</strong></div>
+              <div><span>{t("공통 구매 요청", "Shared purchase request")}</span><strong>{t("이전에 처방받은 의약품 1개 구매", "Buy one pack of previously prescribed medicine")}</strong></div>
               <div className={styles.requestMeta}><Clock3 size={16} /><span>{t("24시간 이내", "Within 24 hours")}</span></div>
             </div>
 
