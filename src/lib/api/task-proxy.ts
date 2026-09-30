@@ -78,7 +78,7 @@ export async function taskProxy(request: Request, parts: string[]) {
     } catch { return fail("INVALID_INPUT", 400); }
   }
   try {
-    const response = await fetch(base, { method: request.method, body, headers: outbound, redirect: "error", cache: "no-store", signal: AbortSignal.any([request.signal, AbortSignal.timeout(path.endsWith("ai-proposal") ? 120000 : 20000)]) });
+    const response = await fetch(base, { method: request.method, body, headers: outbound, redirect: "error", cache: "no-store", signal: AbortSignal.any([request.signal, AbortSignal.timeout(path.endsWith("ai-proposal") ? 120000 : 30000)]) });
     if (response.status >= 300 && response.status < 400) return fail("BACKEND_ACCESS_PROTECTED", 502);
     const data = sanitize(JSON.parse(await limited(response.body, 4 * 1024 * 1024)), session.accessToken);
     return Response.json(data, { status: response.status, headers });

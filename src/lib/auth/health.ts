@@ -12,7 +12,7 @@ export async function walletBackendHealth(request: Request) {
     target.pathname = "/actuator/health";
   } catch { return fail("BACKEND_NOT_CONFIGURED", 503); }
   try {
-    const response = await fetch(target, { cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000), headers: { Accept: "application/json", ...previewBypassHeader(target) } });
+    const response = await fetch(target, { cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(30000)]), headers: { Accept: "application/json", ...previewBypassHeader(target) } });
     if (!response.ok) { await response.body?.cancel(); return fail("AUTH_UPSTREAM_UNAVAILABLE", 503); }
     const reader = response.body?.getReader(); if (!reader) throw new Error();
     const chunks: Uint8Array[] = []; let size = 0;

@@ -17,6 +17,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - run: node --conditions=react-server --experimental-strip-types tests/wallet-health.mjs
       - run: node --conditions=react-server --experimental-strip-types tests/voice-agent-contract.mjs
       - run: node --experimental-strip-types tests/voice-agent-lifecycle.mjs
       - run: node --experimental-strip-types --test tests/magic-adapter.mjs tests/magic-component-flow.mjs

@@ -56,7 +56,7 @@ export async function teamWalletProxy(request: Request, action: string) {
   const headers = new Headers(safeHeaders);
   if (action === "verify") headers.append("Set-Cookie", cookie("floww_wallet_challenge", "", 0));
   try {
-    const response = await fetch(base, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json", ...previewBypassHeader(base) }, body: JSON.stringify(body), cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000) });
+    const response = await fetch(base, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json", ...previewBypassHeader(base) }, body: JSON.stringify(body), cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(30000)]) });
     const value = await json(response.body, 32768);
     if (!response.ok) {
       const allowed = ["CHAIN_NOT_SUPPORTED", "NONCE_INVALID", "NONCE_EXPIRED", "MESSAGE_MISMATCH", "SIGNATURE_INVALID", "USER_SUSPENDED", "TOO_MANY_REQUESTS"];
