@@ -16,7 +16,7 @@ test("signed-out scenario chat and voice routes require login without Task mutat
     await page.goto(path);
     await expect(page).toHaveURL(new RegExp("/login\\?returnTo="));
     const current = new URL(page.url());
-    expect(current.searchParams.get("returnTo")).toBe(path.startsWith("/voice") && process.env.NEXT_PUBLIC_FLOWW_VOICE_ENABLED !== "true" ? "/pharmacy" : path);
+    expect(current.searchParams.get("returnTo")).toBe(path);
     await expect(page.getByRole("heading",{name:"지갑으로 로그인하세요."})).toBeVisible();
     await expect(page.locator(".scenario-card")).toHaveCount(0);
   }
