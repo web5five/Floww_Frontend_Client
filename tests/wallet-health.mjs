@@ -15,5 +15,12 @@ try {
  value={status:'DOWN'}; assert.equal((await req()).status,503); assert.equal(calls,2);
  globalThis.fetch=async()=>{calls++;throw new Error('private infrastructure message');};
  const failed=await req(); assert.equal(failed.status,503); assert.deepEqual(await failed.json(),{reasonCode:'AUTH_UPSTREAM_UNAVAILABLE'});assert.equal(calls,3);
+ // A healthy hosted backend may need more than the former 15-second deadline.
+ globalThis.fetch=async(_url,options)=>{calls++;await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,16000);options.signal.addEventListener('abort',()=>{clearTimeout(timer);reject(options.signal.reason);},{once:true});});return Response.json({status:'UP'});};
+ assert.equal((await req()).status,200);assert.equal(calls,4);
+ const controller=new AbortController();
+ const cancelled=walletBackendHealth(new Request('http://localhost/api/wallet-auth/health',{signal:controller.signal}));
+ controller.abort();
+ assert.equal((await cancelled).status,503);assert.equal(calls,5);
  console.log('health proxy configuration, response minimization and no-retry checks passed');
 } finally {globalThis.fetch=original;}

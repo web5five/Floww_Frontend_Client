@@ -62,7 +62,7 @@ export async function walletAuthProxy(request: Request, action: string) {
   if (action === "verify" || action === "logout") responseHeaders.append("Set-Cookie", cookie(challengeCookie, "", 0, secure));
   if (action === "logout") responseHeaders.append("Set-Cookie", cookie(sessionCookie, "", 0, secure));
   try {
-    const upstream = await fetch(target, { method: spec[0], headers: { Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}), ...(["session", "logout"].includes(action) && session ? { Authorization: `Bearer ${session}` } : {}), ...previewBypassHeader(target) }, body, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000) });
+    const upstream = await fetch(target, { method: spec[0], headers: { Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}), ...(["session", "logout"].includes(action) && session ? { Authorization: `Bearer ${session}` } : {}), ...previewBypassHeader(target) }, body, cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(30000)]) });
     if (action === "logout") return Response.json({ revoked: upstream.ok }, { status: upstream.ok ? 200 : 502, headers: responseHeaders });
     if (action === "session" && upstream.status === 401) {
       responseHeaders.append("Set-Cookie", cookie(sessionCookie, "", 0, secure));
