@@ -5,7 +5,7 @@
 **Owner:** Geondong Kim, Orca implementation worker  
 **Time:** 2026-09-30 09:24 KST  
 **Repository:** Floww_Frontend_Client, `feature/f036-voice-language`, base `origin/main` at `5003d0a`.
-**Implementation commit:** `115a22d` (local only; no push or merge).
+**Implementation commits:** `115a22d`, `cbe3b5e` (local only; no push or merge).
 
 ## Sources and decision boundary
 
@@ -18,6 +18,7 @@
 - `src/components/voice-agent.tsx`, `src/app/voice/page.tsx`: localized voice page, chat microphone launcher, controls, statuses, transcript labels, errors, and scenario confirmation. On a locale change, the active session releases its microphone, peer, data channel, and audio, clears pending confirmation and transcript, and presents a translated restart notice. Restart requires a new click.
 - `src/lib/voice/client-session.ts`: Korean and English connection recovery text, with Korean retained as the default for existing callers.
 - `src/lib/voice/session-server.ts`: optional `locale=ko|en` query parameter, default `ko`; reject unknown or duplicate values. The server's Realtime instructions require the selected language while retaining all purchase authority restrictions. The server-only API key remains on the server.
+- `src/lib/voice/contract.ts`: exact-shape validation for the model's `set_language` arguments. The model may request this tool only when the user explicitly asks to change or translate the conversation language. A valid change updates the shared persisted locale, tears down the current voice session, clears any pending scenario and transcript, and requires a new user click to start in the selected language. Invalid locale arguments do nothing; no Task, auth, or payment state changes.
 - `tests/voice-agent-contract.mjs`, `tests/voice-agent-lifecycle.mjs`, `tests/voice-agent.spec.ts`: validate language input, server prompt, recovery text, desktop and mobile English voice UI, task binding, and zero purchase mutations in the fixture.
 
 `VoiceGuide` and `/api/voice-guide` are not imported by any rendered route or component. Their prerecorded Korean-only audio is outside the active voice conversation path; no English audio asset was invented or played. Controller can decide whether to remove or separately translate that dormant guide before making it visible.
@@ -32,11 +33,11 @@ Node 24.19.0, npm 11.11.1, Next.js 16.3.6; existing dependency cache only. Dev b
 | `node --experimental-strip-types tests/voice-agent-lifecycle.mjs` | Passed: resource release, transcript lifecycle, and Korean/English recovery messages. |
 | `npm run typecheck` | Passed. |
 | `npm run lint` | Passed with zero warnings. |
-| `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3004 npm run test:e2e -- tests/voice-agent.spec.ts` | 6 passed across desktop and mobile using browser fixtures. English session requested `locale=en`; scenario remained on-screen with no purchase mutation. |
-| `npm run build -- --webpack` | Passed. Existing MetaMask SDK optional React Native AsyncStorage resolution warnings appeared. |
+| `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3004 npm run test:e2e -- tests/voice-agent.spec.ts` | 6 passed across desktop and mobile using browser fixtures. English session requested `locale=en`; invalid `set_language` was ignored; a valid Korean switch closed the session, cleared confirmation, and did not start a second voice, auth, Task mutation, or payment request. |
+| `npm run build -- --webpack` | Passed on implementation commit `115a22d` before the spoken language tool follow-up. Existing MetaMask SDK optional React Native AsyncStorage resolution warnings appeared. The controller owns the final combined build. |
 
 The initial English browser test failed while the shared root layout imported the cookie name across a client-module boundary. After the foundation fix, direct HTML returned `lang=en` and `initialLocale=en`, and the English desktop/mobile tests passed. This report does not claim final combined branch verification, hosted voice access, a live OpenAI session, payment, or user acceptance.
 
 ## Handoff
 
-Controller: integrate this local branch with the remaining F036 surfaces, run the combined build and locale-switch regression, and decide whether the unused Korean audio guide should remain dormant. This record is `PENDING_SYNC` for the designated worklog under Confluence page `12517414`; no external page was edited under this worker dispatch. The preexisting generated `next-env.d.ts` change was preserved outside the scoped commit.
+Controller: integrate this local branch with the remaining F036 surfaces, run the combined build and locale-switch regression, and decide whether the unused Korean audio guide should remain dormant. This record is `PENDING_SYNC` for the designated worklog under Confluence page `12517414`; no external page was edited under this worker dispatch. The preexisting generated `next-env.d.ts` change was preserved outside the scoped commits.
