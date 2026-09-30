@@ -1,0 +1,172 @@
+"use client";
+
+import Link from "next/link";
+import {
+  ArrowRight,
+  Bot,
+  Check,
+  ChevronRight,
+  CircleDollarSign,
+  Clock3,
+  FileCheck2,
+  Headphones,
+  LockKeyhole,
+  PackageCheck,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  Store,
+  Wallet,
+  X,
+} from "lucide-react";
+import { useState } from "react";
+import { useLocale } from "@/lib/i18n";
+import styles from "./overview-command-center.module.css";
+
+type ScenarioId = "allowed" | "budget" | "recipient";
+
+const scenarios = {
+  allowed: {
+    eyebrow: ["정상 구매", "Successful purchase"],
+    title: ["예산 안에서 가장 적합한 약국", "Best pharmacy within the budget"],
+    summary: ["Kiln 제안과 서버 정책을 확인한 뒤 사용자가 지갑에서 최종 승인합니다.", "The user reviews the Kiln proposal and server policy, then gives final wallet approval."],
+    pharmacy: "Harbor Pharmacy",
+    amount: "23.50 fUSDC",
+    decision: "ALLOW",
+    reason: ["금액과 수취인이 위임 범위 안에 있습니다.", "Amount and recipient are within the mandate."],
+    proof: ["승인 → Sepolia 지급 → 이행 확인", "Approval → Sepolia payment → fulfillment"],
+    tone: "allow",
+  },
+  budget: {
+    eyebrow: ["예산 초과 차단", "Over-budget block"],
+    title: ["60 fUSDC 한도를 넘는 견적", "Quote exceeds the 60 fUSDC limit"],
+    summary: ["정책이 서명과 브로드캐스트 전에 요청을 멈춥니다.", "Policy stops the request before signing or broadcast."],
+    pharmacy: "Central Pharmacy",
+    amount: "64.00 fUSDC",
+    decision: "DENY",
+    reason: ["AMOUNT_EXCEEDS_MANDATE", "AMOUNT_EXCEEDS_MANDATE"],
+    proof: ["서명 없음 · 전송 없음 · TX 없음", "No signature · no broadcast · no TX"],
+    tone: "deny",
+  },
+  recipient: {
+    eyebrow: ["수취인 위반 차단", "Wrong-recipient block"],
+    title: ["등록되지 않은 주소로 보내는 요청", "Request targets an unregistered address"],
+    summary: ["서버의 판매자 주소와 다르면 거래를 만들지 않습니다.", "No transaction is created when the recipient differs from the server merchant registry."],
+    pharmacy: "Riverside Pharmacy",
+    amount: "19.00 fUSDC",
+    decision: "DENY",
+    reason: ["RECIPIENT_NOT_ALLOWED", "RECIPIENT_NOT_ALLOWED"],
+    proof: ["서명 없음 · 전송 없음 · TX 없음", "No signature · no broadcast · no TX"],
+    tone: "deny",
+  },
+} as const;
+
+const scenarioOrder: ScenarioId[] = ["allowed", "budget", "recipient"];
+
+export function OverviewCommandCenter() {
+  const [selected, setSelected] = useState<ScenarioId>("allowed");
+  const { t } = useLocale();
+  const translate = (value: readonly [string, string]) => t(value[0], value[1]);
+  const scenario = scenarios[selected];
+
+  return (
+    <main id="main" className={`page-shell ${styles.shell}`}>
+      <section className={styles.app} aria-label={t("Floww 심사 데모 콘솔", "Floww judge demo console")}>
+        <header className={styles.appHeader}>
+          <div>
+            <span className={styles.liveDot} aria-hidden="true" />
+            <strong>{t("심사 데모 콘솔", "Judge demo console")}</strong>
+            <span className={styles.network}>Sepolia · fUSDC</span>
+          </div>
+          <div className={styles.headerStatus}><ShieldCheck size={16} /> {t("승인 전에는 결제되지 않아요", "Nothing is paid before approval")}</div>
+        </header>
+
+        <div className={styles.appBody}>
+          <aside className={styles.rail} aria-label={t("기능 바로가기", "Feature shortcuts")}>
+            <div className={styles.railPrimary}>
+              <span className={styles.railLabel}>FLOWW</span>
+              <button className={styles.railActive} type="button" aria-label={t("구매 데모", "Purchase demo")}>
+                <ShoppingBag size={20} /><span>{t("구매", "Buy")}</span>
+              </button>
+              <Link href="/voice" aria-label={t("음성 도우미", "Voice assistant")}><Headphones size={20} /><span>{t("음성", "Voice")}</span></Link>
+              <Link href="/dashboard" aria-label={t("내 작업", "My Tasks")}><FileCheck2 size={20} /><span>{t("작업", "Tasks")}</span></Link>
+            </div>
+            <Link className={styles.railWallet} href="/login?returnTo=%2Fpharmacy" aria-label={t("지갑 로그인", "Wallet sign-in")}>
+              <Wallet size={20} /><span>{t("로그인", "Sign in")}</span>
+            </Link>
+          </aside>
+
+          <section className={styles.workspace}>
+            <div className={styles.titleRow}>
+              <div>
+                <span className={styles.kicker}><Sparkles size={15} /> {t("심사위원이 확인할 내용", "WHAT JUDGES WILL SEE")}</span>
+                <h1>{t("세 번 누르면,", "Three clicks.")}<br /><span>{t("핵심 증명이 끝납니다.", "The proof is clear.")}</span></h1>
+              </div>
+              <div className={styles.taskChip}><span>{t("작업 한도", "Task limit")}</span><strong>60.00 fUSDC</strong></div>
+            </div>
+
+            <div className={styles.requestCard}>
+              <div className={styles.requestIcon}><ShoppingBag size={21} /></div>
+              <div><span>{t("공통 구매 요청", "Shared purchase request")}</span><strong>{t("아세트아미노펜 500mg · 10정", "Acetaminophen 500mg · 10 tablets")}</strong></div>
+              <div className={styles.requestMeta}><Clock3 size={16} /><span>{t("24시간 이내", "Within 24 hours")}</span></div>
+            </div>
+
+            <div className={styles.sectionTitle}>
+              <div><span>{t("필수 데모 3개", "THREE REQUIRED DEMOS")}</span><strong>{t("카드를 눌러 판단과 증거를 확인하세요", "Select a card to inspect the decision and evidence")}</strong></div>
+              <span>1 SUCCESS · 2 DENY</span>
+            </div>
+
+            <div className={styles.scenarios} role="group" aria-label={t("필수 데모 선택", "Required demo selection")}>
+              {scenarioOrder.map((id, index) => {
+                const item = scenarios[id];
+                const active = selected === id;
+                return <button key={id} type="button" className={active ? styles.scenarioActive : styles.scenario} aria-pressed={active} onClick={() => setSelected(id)}>
+                  <span className={styles.scenarioNumber}>0{index + 1}</span>
+                  <span className={styles.scenarioText}><strong>{translate(item.eyebrow)}</strong><small>{item.amount}</small></span>
+                  {id === "allowed" ? <Check size={17} /> : <X size={17} />}
+                </button>;
+              })}
+            </div>
+
+            <div className={styles.workspaceFooter}>
+              <div><LockKeyhole size={17} /><span>{t("로그인은 신원 확인이며 구매 승인은 별도입니다.", "Sign-in verifies identity; purchase approval is separate.")}</span></div>
+              <Link className="button primary" href="/login?returnTo=%2Fpharmacy">{t("실제 흐름 시작", "Start live flow")} <ArrowRight size={17} /></Link>
+            </div>
+          </section>
+
+          <aside className={styles.insight} aria-live="polite">
+            <div className={styles.insightTop}>
+              <div className={styles.botIcon}><Bot size={22} /></div>
+              <div><span>Kiln · qwen3-32b</span><strong>{t("판단 및 실행 증거", "Decision and execution evidence")}</strong></div>
+              <span className={styles.ready}>READY</span>
+            </div>
+
+            <div className={styles.recommendation}>
+              <span>{translate(scenario.eyebrow)}</span>
+              <h2>{translate(scenario.title)}</h2>
+              <p>{translate(scenario.summary)}</p>
+            </div>
+
+            <div className={styles.quote}>
+              <div><Store size={18} /><span>{t("선택 약국", "Selected pharmacy")}</span><strong>{scenario.pharmacy}</strong></div>
+              <div><CircleDollarSign size={18} /><span>{t("결제 금액", "Payment amount")}</span><strong>{scenario.amount}</strong></div>
+            </div>
+
+            <div className={`${styles.decision} ${scenario.tone === "allow" ? styles.decisionAllow : styles.decisionDeny}`}>
+              <div>{scenario.tone === "allow" ? <PackageCheck size={22} /> : <ShieldCheck size={22} />}<span>{t("정책 결과", "Policy result")}</span><strong>{scenario.decision}</strong></div>
+              <p>{translate(scenario.reason)}</p>
+            </div>
+
+            <ol className={styles.flow} aria-label={t("구매 처리 단계", "Purchase processing steps")}>
+              <li className={styles.flowDone}><span><Check size={13} /></span><div><strong>{t("지갑 인증 · Task · 견적 3개", "Wallet auth · Task · three quotes")}</strong><small>{t("같은 Task에서 전체 과정 유지", "One Task across the complete journey")}</small></div></li>
+              <li className={styles.flowDone}><span><Check size={13} /></span><div><strong>{t("AI 제안 · 서버 정책", "AI proposal · server policy")}</strong><small>{t("AI는 제안하고 정책이 결정", "AI proposes; deterministic policy decides")}</small></div></li>
+              <li className={scenario.tone === "allow" ? styles.flowCurrent : styles.flowLocked}><span>{scenario.tone === "allow" ? "3" : <LockKeyhole size={12} />}</span><div><strong>{scenario.tone === "allow" ? t("사용자 승인과 실행", "User approval and execution") : t("실행 전 차단", "Blocked before execution")}</strong><small>{translate(scenario.proof)}</small></div></li>
+            </ol>
+
+            <Link className={styles.detailLink} href="/login?returnTo=%2Fpharmacy">{t("로그인하여 실제 기록 열기", "Sign in to open live records")} <ChevronRight size={17} /></Link>
+          </aside>
+        </div>
+      </section>
+    </main>
+  );
+}

@@ -8,7 +8,7 @@ The client uses Next.js/React and server-side BFF routes to connect wallet sign-
 
 | Route | What it does |
 | --- | --- |
-| `/` | Overview and process explanation. |
+| `/` | Interactive judge console for one success path and two pre-broadcast DENY cases, followed by the product process explanation. |
 | `/settings` | Persistent Korean or English display preference, available before login. |
 | `/login` | MetaMask browser wallet or Magic email wallet, then the same server SIWE challenge, verification, and HttpOnly session. |
 | `/pharmacy` | Three authenticated purchase scenarios: permitted, over budget, and recipient condition. |
