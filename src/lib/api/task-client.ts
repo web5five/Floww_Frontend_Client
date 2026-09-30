@@ -10,10 +10,16 @@ export const taskErrors: Record<string, string> = {
   INVALID_RESPONSE: "서버 응답이 현재 계약과 다릅니다. 실제 상태를 확인하기 전 실행하지 않습니다.",
   CHAIN_NOT_READY: "이 작업의 Task Account가 아직 준비되지 않았거나 서버 체인 모드가 활성화되지 않았습니다.",
 };
+export class TaskRequestError extends Error {
+  constructor(readonly status: number, readonly reasonCode: string, message: string) { super(message); this.name = "TaskRequestError"; }
+}
 export async function taskRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`/api/tasks${path}`, { ...init, cache: "no-store" });
   let data; try { data = await response.json(); } catch { throw new Error(taskErrors.INVALID_RESPONSE); }
-  if (!response.ok) { const code = data.reasonCode ?? data.error?.code ?? "INVALID_RESPONSE"; throw new Error(`${code} · ${taskErrors[code] ?? data.message?.ko ?? "요청을 처리할 수 없습니다."}`); }
+  if (!response.ok) {
+    const code = typeof data?.reasonCode === "string" ? data.reasonCode : typeof data?.error?.code === "string" ? data.error.code : "INVALID_RESPONSE";
+    throw new TaskRequestError(response.status, code, `${code} · ${taskErrors[code] ?? data?.message?.ko ?? "요청을 처리할 수 없습니다."}`);
+  }
   return data;
 }
 const request = taskRequest;
