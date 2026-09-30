@@ -1,9 +1,9 @@
 # F036C — Voice conversation language handoff
 
-**Status:** Implemented and locally verified, pending controller integration and live acceptance.  
-**Task:** F036C / `task_52d8b852befb` / `ctx_bd7455a90581`  
-**Owner:** Geondong Kim, Orca implementation worker  
-**Time:** 2026-09-30 09:24 KST  
+**Status:** Implemented and locally verified, pending controller integration and live acceptance.
+**Task:** F036C / `task_52d8b852befb` / `ctx_bd7455a90581`
+**Owner:** Geondong Kim, Orca implementation worker
+**Time:** 2026-09-30 09:24 KST
 **Repository:** Floww_Frontend_Client, `feature/f036-voice-language`, base `origin/main` at `5003d0a`.
 **Implementation commits:** `115a22d`, `cbe3b5e` (local only; no push or merge).
 
