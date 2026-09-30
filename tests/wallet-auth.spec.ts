@@ -6,14 +6,14 @@ test("team JWT adapter protects cookies and gates unavailable business authentic
 test("wallet auth proxy isolates credentials and refuses shared dev identity", () => {
   expect(execFileSync(process.execPath, ["--conditions=react-server", "--experimental-strip-types", "tests/wallet-auth-proxy.mjs"], { encoding: "utf8", timeout: 30000 })).toContain("checks passed");
 });
-async function setup(page: Page, mode: "ok" | "reject" | "wrong-domain" | "invalid" = "ok", team = false) {
+async function setup(page: Page, mode: "ok" | "reject" | "wrong-domain" | "wrong-address" | "wrong-chain" | "invalid" = "ok", team = false) {
   await page.addInitScript(({ reject }) => {
     const address = "0x1111111111111111111111111111111111111111";
     const methods: string[] = [];
     const listeners: Record<string, (() => void)[]> = {};
     Object.assign(window, { authFixture: { methods, change: () => (listeners.accountsChanged ?? []).forEach(fn => fn()), emit: (name: string) => [...(listeners[name] ?? [])].forEach(fn => fn()) } });
     const provider = { request: async ({ method }: { method: string }) => { methods.push(method); if (method === "eth_chainId") return "0x1"; if (method === "personal_sign") { if (reject) throw { code: 4001 }; return "0x" + "11".repeat(65); } return [address]; }, on: (name: string, fn: () => void) => { (listeners[name] ??= []).push(fn); }, removeListener: (name: string, fn: () => void) => { listeners[name] = (listeners[name] ?? []).filter(f => f !== fn); } };
-    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "auth-fixture", name: "Auth Fixture" }, provider } })));
+    window.addEventListener("eip6963:requestProvider", () => window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail: { info: { uuid: "auth-fixture", name: "MetaMask" }, provider } })));
   }, { reject: mode === "reject" });
   let verifies = 0;
   let signedIn = false;
@@ -25,7 +25,7 @@ async function setup(page: Page, mode: "ok" | "reject" | "wrong-domain" | "inval
     if (action === "logout") { signedIn = false; return route.fulfill({ json: { revoked: true } }); }
     if (action === "challenge") {
       const origin = new URL(route.request().url());
-      return route.fulfill({ json: { id: "a".repeat(64), expiresAt: session.expiresAt, message: `${mode === "wrong-domain" ? "evil.test" : origin.host} wants you to sign in with your Ethereum account:\n${session.identity.address}\n\nSign in to Floww. This does not authorize spending.\n\nURI: ${origin.origin}/login\nVersion: 1\nChain ID: 1\nNonce: abcdef123456\nIssued At: ${new Date().toISOString()}\nExpiration Time: ${session.expiresAt}` } });
+      return route.fulfill({ json: { id: "a".repeat(64), expiresAt: session.expiresAt, message: `${mode === "wrong-domain" ? "evil.test" : origin.host} wants you to sign in with your Ethereum account:\n${mode === "wrong-address" ? "0x2222222222222222222222222222222222222222" : session.identity.address}\n\nSign in to Floww. This does not authorize spending.\n\nURI: ${origin.origin}/login\nVersion: 1\nChain ID: ${mode === "wrong-chain" ? "11155111" : "1"}\nNonce: abcdef123456\nIssued At: ${new Date().toISOString()}\nExpiration Time: ${session.expiresAt}` } });
     }
     verifies++; await new Promise(r => setTimeout(r, 100));
     if (mode === "invalid") return route.fulfill({ status: 401, json: { reasonCode: "UNAUTHORIZED" } });
@@ -33,8 +33,8 @@ async function setup(page: Page, mode: "ok" | "reject" | "wrong-domain" | "inval
   });
   await page.goto("/login");
   await page.getByRole("button", { name: "지갑 선택", exact: true }).click();
-  await page.getByRole("button", { name: /Auth Fixture.*이 브라우저에서 감지됨/ }).click();
-  await page.getByRole("button", { name: "Auth Fixture 연결", exact: true }).click();
+  await page.getByRole("button", { name: /MetaMask.*이 브라우저에서 감지됨/ }).click();
+  await page.getByRole("button", { name: "MetaMask 연결", exact: true }).click();
   return () => verifies;
 }
 test("wallet login verifies once, restores session, and logout clears authentication", async ({ page }) => {
@@ -49,7 +49,7 @@ test("wallet login verifies once, restores session, and logout clears authentica
   await page.getByRole("button", { name: "로그아웃", exact: true }).click();
   await expect(page.getByRole("button", { name: "지갑 연결", exact: true })).toBeVisible();
 });
-for (const mode of ["reject", "wrong-domain", "invalid"] as const) test(`wallet ${mode} never authenticates`, async ({ page }) => {
+for (const mode of ["reject", "wrong-domain", "wrong-address", "wrong-chain", "invalid"] as const) test(`wallet ${mode} never authenticates`, async ({ page }) => {
   const count = await setup(page, mode);
   await page.getByRole("button", { name: "로그인 메시지 서명", exact: true }).click();
   await expect(page.locator("main").getByRole("alert")).toBeVisible();
@@ -62,6 +62,26 @@ test("wallet account change revokes authenticated state", async ({ page }) => {
   await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as { authFixture: { change(): void } }).authFixture.change());
   await expect(page.getByRole("button", { name: "지갑 연결", exact: true })).toBeVisible();
+});
+test("cancelled delayed challenge cannot sign or restore an old owner", async ({ page }) => {
+  const count = await setup(page);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let requested = false;
+  await page.route("**/api/wallet-auth/challenge", async route => {
+    requested = true;
+    await gate;
+    await route.fallback();
+  });
+  await page.getByRole("button", { name: "로그인 메시지 서명", exact: true }).click();
+  await expect.poll(() => requested).toBe(true);
+  await page.evaluate(() => (window as unknown as { authFixture: { change(): void } }).authFixture.change());
+  const challengeResponse = page.waitForResponse(response => response.url().endsWith("/api/wallet-auth/challenge"));
+  release();
+  await challengeResponse;
+  await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toHaveCount(0);
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as { authFixture: { methods: string[] } }).authFixture.methods)).includes("personal_sign")).toBe(false);
+  expect(count()).toBe(0);
 });
 for (const event of ["chainChanged", "disconnect"]) test(`wallet ${event} clears old identity safely`, async ({ page }) => {
   await setup(page);
@@ -82,7 +102,7 @@ test("login server failure supports explicit retry without dropping wallet conne
   const login = page.getByRole("button", { name: "로그인 메시지 서명", exact: true });
   await login.click();
   await expect(page.locator("main").getByRole("alert")).toBeVisible();
-  await expect(page.getByText("Auth Fixture 연결됨", { exact: true })).toBeVisible();
+  await expect(page.getByText("MetaMask 연결됨", { exact: true })).toBeVisible();
   await login.click();
   await expect(page.getByRole("button", { name: "지갑 계정", exact: true })).toBeVisible();
 });
@@ -115,8 +135,8 @@ test("unsupported chain is explained before requesting a signature", async ({ pa
   await page.route("**/api/wallet-auth/config", route => route.fulfill({ json: { enabled: true, chainIds: ["11155111"] } }));
   await page.reload();
   await page.getByRole("button", { name: "지갑 선택", exact: true }).click();
-  await page.getByRole("button", { name: /Auth Fixture.*이 브라우저에서 감지됨/ }).click();
-  await page.getByRole("button", { name: "Auth Fixture 연결", exact: true }).click();
+  await page.getByRole("button", { name: /MetaMask.*이 브라우저에서 감지됨/ }).click();
+  await page.getByRole("button", { name: "MetaMask 연결", exact: true }).click();
   await expect(page.getByText("지원하는 로그인 네트워크", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "로그인 메시지 서명", exact: true })).toBeDisabled();
 });

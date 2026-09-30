@@ -1,5 +1,5 @@
 import { connectorsForWallets } from "@rainbow-me/rainbowkit";
-import { coinbaseWallet, injectedWallet, metaMaskWallet, walletConnectWallet } from "@rainbow-me/rainbowkit/wallets";
+import { injectedWallet, metaMaskWallet } from "@rainbow-me/rainbowkit/wallets";
 import { http } from "viem";
 import { sepolia } from "viem/chains";
 import { createConfig } from "wagmi";
@@ -9,7 +9,7 @@ import { createConfig } from "wagmi";
 // has only Sepolia, no burner wallet, local faucet, or application contracts.
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim() ?? "";
 const wallets = projectId
-  ? [metaMaskWallet, coinbaseWallet, injectedWallet, walletConnectWallet]
+  ? [metaMaskWallet, injectedWallet]
   : [injectedWallet];
 
 export const walletToolkitConfig = createConfig({

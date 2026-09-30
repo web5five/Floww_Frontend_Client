@@ -135,7 +135,9 @@ Open http://127.0.0.1:3001. No backend configuration is required for local demos
 | / | Pharmacy-first landing |
 | /dashboard | Purchase conditions, local approval/rejection/STOP and activity; optional backend test workspace |
 | /pharmacy | Local pharmacy rehearsal, evidence checklist and authenticated server Task workspace |
-| /login | Browser EVM wallet discovery and separate server authentication |
+| /login | MetaMask browser wallet or Magic email wallet, followed by the same server SIWE authentication |
+
+The Magic email choice requires `NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY` with a valid `pk_` publishable key. Leave it blank to show a disabled, truthful choice. The client lazy loads `magic-sdk@33.13.0` only when email sign-in starts and requests Sepolia through the explicit RPC/chain ID configuration. Both wallet methods use `/api/wallet-auth` for the server challenge, exact sign-in message, verification, HttpOnly session and logout; an email or Magic DID is never a Floww owner credential. Server origin/chain allowlists and wallet authentication must also be configured before deployment. Login does not grant spending authority. See [Magic client handoff](docs/F037_MAGIC_WALLET_UI_KO_EN.md).
 
 Local pharmacy subtotals are 23.5/64/19 fUSDC against a 60 fUSDC Task limit; B demonstrates budget denial and C an unauthorized recipient. Fees, prescription/identity conditions and recipients remain unverified. A subtotal under budget is not policy ALLOW. Candidate changes clear review confirmation. Actual authorization is disabled. The older Nike demo remains available independently.
 

@@ -29,6 +29,14 @@ export function useWalletAuth() {
   const [mode, setMode] = useState("local-session");
   const [businessReady, setBusinessReady] = useState(true);
   const [session, setSession] = useState<WalletSession | null>(null);
+  const authority = useRef<{ epoch: number; session: WalletSession | null }>({ epoch: 0, session: null });
+  function publishSession(next: WalletSession | null) {
+    authority.current = { epoch: authority.current.epoch + 1, session: next };
+    setSession(next);
+  }
+  const snapshot = () => authority.current;
+  const isCurrent = (value: { epoch: number; session: WalletSession | null }) =>
+    authority.current === value && !!value.session && Date.parse(value.session.expiresAt) > Date.now();
   const [initialized, setInitialized] = useState(false);
   const [phase, setPhase] = useState("idle");
   const [errorCode, setError] = useState<AuthError | "">("");
@@ -49,20 +57,20 @@ export function useWalletAuth() {
         setSupportedChainIds(Array.isArray(result.chainIds) ? result.chainIds.filter((id: unknown) => typeof id === "string" && /^[1-9][0-9]{0,15}$/.test(id)) : []);
         if (enabledRef.current) {
           const s = await api.getSession();
-          if (active && lifecycle.current === version) setSession(s && Date.parse(s.expiresAt) > Date.now() ? s : null);
+          if (active && lifecycle.current === version) publishSession(s && Date.parse(s.expiresAt) > Date.now() ? s : null);
         }
       } catch { if (active) setError("status"); }
       finally { if (active) setInitialized(true); }
     };
     void init();
-    return () => { active = false; lifecycle.current++; };
+    return () => { active = false; lifecycle.current++; authority.current = { epoch: authority.current.epoch + 1, session: null }; };
   }, []);
   useEffect(() => {
     if (!session) return;
     const expire = () => {
       if (Date.parse(session.expiresAt) <= Date.now()) {
         serial.current++;
-        setSession(null); setError("expired");
+        publishSession(null); setError("expired");
       }
     };
     const timer = setTimeout(expire, Math.max(0, Date.parse(session.expiresAt) - Date.now()));
@@ -71,17 +79,17 @@ export function useWalletAuth() {
     return () => { clearTimeout(timer); window.removeEventListener("focus", expire); document.removeEventListener("visibilitychange", expire); };
   }, [session]);
   async function logout() {
-    if (loggingOut.current) return;
-    serial.current++; setSession(null); setPhase("idle");
-    if (!enabledRef.current) return;
+    if (loggingOut.current) return false;
+    serial.current++; publishSession(null); setPhase("idle");
+    if (!enabledRef.current) return true;
     loggingOut.current = true;
-    try { await api.logout(); setError(""); } catch { setError("logout"); }
+    try { await api.logout(); setError(""); return true; } catch { setError("logout"); return false; }
     finally { loggingOut.current = false; }
   }
   async function login(connection: Connection, provider: WalletProvider) {
     if (!enabledRef.current || pending.current || loggingOut.current) return;
     if (supportedChainIds.length && !supportedChainIds.includes(BigInt(connection.chainId).toString())) { setError("chain"); return; }
-    pending.current = true; const version = ++serial.current; setError(""); setPhase("requesting_challenge");
+    pending.current = true; const version = ++serial.current; publishSession(null); setError(""); setPhase("requesting_challenge");
     const current = () => version === serial.current;
     try {
       const chainId = BigInt(connection.chainId).toString(10);
@@ -116,10 +124,10 @@ export function useWalletAuth() {
       const verified = await api.verify({ challengeId: challenge.id, message: challenge.message, signature });
       if (!current()) { await api.logout(); return; }
       if (verified.identity.address.toLowerCase() !== connection.address.toLowerCase() || verified.chainId !== chainId) { await api.logout(); throw new Error("WRONG_IDENTITY"); }
-      setSession(verified); setPhase("authenticated");
+      publishSession(verified); setPhase("authenticated");
     } catch (cause) {
       if (current()) {
-        setSession(null); setPhase("idle");
+        publishSession(null); setPhase("idle");
         const code = cause instanceof Error ? cause.message : "";
         setError((cause as { code?: number })?.code === 4001 ? "rejected"
           : ["BACKEND_NOT_CONFIGURED", "AUTH_SESSION_NOT_CONFIGURED"].includes(code) ? "configuration"
@@ -130,5 +138,5 @@ export function useWalletAuth() {
       }
     } finally { pending.current = false; }
   }
-  return { enabled, initialized, mode, businessReady, supportedChainIds, session, phase, error: errorCode ? t(authErrors[errorCode][0], authErrors[errorCode][1]) : "", login, logout, busy: !["idle", "authenticated"].includes(phase) };
+  return { enabled, initialized, mode, businessReady, supportedChainIds, session, phase, error: errorCode ? t(authErrors[errorCode][0], authErrors[errorCode][1]) : "", login, logout, snapshot, isCurrent, isPending: () => pending.current, busy: !["idle", "authenticated"].includes(phase) };
 }
