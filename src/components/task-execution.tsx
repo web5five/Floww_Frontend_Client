@@ -10,6 +10,7 @@ import { accountProgress } from "@/lib/api/account-evidence";
 import { keccak256 } from "ethers";
 import { useLocale } from "@/lib/i18n";
 import { merchantLabel } from "@/lib/scenario-presentation";
+import { WalletRequestFailure } from "@/lib/auth/wallet";
 
 type WalletOperation = { kind: "deploy" | "allowance" | "fund"; hash: string | null; confirmed: boolean; at: string; to?: string; dataHash: string };
 type ServerUnknown = { action: "approve" | "payment" | "fulfillment"; fromState: string };
@@ -38,6 +39,7 @@ const executionMessages: Record<string, string> = {
   "서버 주문 생성됨 · 실제 지급은 다음 버튼으로 요청하세요.": "Server order created. Use the next button to request payment.",
   "서버 지급 상태를 확인하세요.": "Check server payment status.",
   "올바른 거래 해시를 입력하세요.": "Enter a valid transaction hash.",
+  "지갑 요청 결과를 확인하지 못했습니다. 거래 상태를 확인하기 전에는 재전송하지 마세요.": "Could not confirm the wallet request result. Do not resend before checking transaction status.",
 };
 const executionCodes: Record<string, [string, string]> = {
   "ACCOUNT_ATTEMPT_MISMATCH": ["승인된 구매 시도와 계정이 일치하지 않습니다. 작업을 다시 조회하세요.", "The approved purchase attempt does not match the account. Refresh the Task."],
@@ -89,6 +91,7 @@ export function TaskExecution({ task, stopped, isStopped, onTask }: { task: Task
   const ready = restoredScope === scopeKey && (restoration === "unprepared" || restoration === "restored");
   const unknownRef = useRef<ServerUnknown | null>(null), pendingRef = useRef<WalletOperation | null>(null);
   const [error, setError] = useState(""), [notice, setNotice] = useState("");
+  const [walletDiagnostic, setWalletDiagnostic] = useState<Pick<WalletRequestFailure, "phase" | "code" | "category"> | null>(null);
   const locked = useRef(false), alive = useRef(false), latest = useRef({ isStopped, owner, taskId: task.taskId });
   const onTaskRef = useRef(onTask), generationRef = useRef(0), hasRecoveryRef = useRef(false), storageValidRef = useRef(false), restoringRef = useRef<number | null>(null);
   const poll = useRef({ key: "", attempts: 0 });
@@ -143,7 +146,7 @@ export function TaskExecution({ task, stopped, isStopped, onTask }: { task: Task
     const generation = ++generationRef.current;
     alive.current = true; restoringRef.current = null; hasRecoveryRef.current = false; storageValidRef.current = false;
     queueMicrotask(() => { if (!alive.current || generationRef.current !== generation) return;
-    setRestoredScope(scopeKey); setStorageValid(false); setRestoration("loading"); setAccount(null); setFunding(null); setError(""); setNotice("");
+    setRestoredScope(scopeKey); setStorageValid(false); setRestoration("loading"); setAccount(null); setFunding(null); setError(""); setNotice(""); setWalletDiagnostic(null);
     try {
       unknownRef.current = null;
       pendingRef.current = null;
@@ -190,7 +193,7 @@ export function TaskExecution({ task, stopped, isStopped, onTask }: { task: Task
   }
   async function run(job: () => Promise<void>) {
     if (locked.current || !ready || !allowed()) return;
-    locked.current = true; setBusy(true); setError(""); setNotice("");
+    locked.current = true; setBusy(true); setError(""); setNotice(""); setWalletDiagnostic(null);
     try { await job(); } catch (e) { if (alive.current) setError(e instanceof Error ? e.message : "요청 결과를 확인하지 못했습니다."); }
     finally { locked.current = false; if (alive.current) setBusy(false); }
   }
@@ -237,6 +240,10 @@ export function TaskExecution({ task, stopped, isStopped, onTask }: { task: Task
       save({...record,hash}); ensure(); setNotice("Sepolia 거래 제출됨 · 영수증 확인 전에는 성공으로 표시하지 않습니다.");
     } catch(e) {
       if (e && typeof e === "object" && "code" in e && e.code === 4001) { save(null); throw new Error("사용자가 지갑 요청을 거절했습니다. 거래를 제출하지 않았습니다."); }
+      if (e instanceof WalletRequestFailure) {
+        if (alive.current) setWalletDiagnostic({ phase: e.phase, code: e.code, category: e.category });
+        throw new Error("지갑 요청 결과를 확인하지 못했습니다. 거래 상태를 확인하기 전에는 재전송하지 마세요.");
+      }
       throw e;
     }
   }
@@ -318,7 +325,7 @@ export function TaskExecution({ task, stopped, isStopped, onTask }: { task: Task
       <p role="status">{progress?.completed ? t("지급과 약국 이행 확인을 마쳤습니다.", "Payment and pharmacy fulfillment have been verified.") : progress?.paid ? t("지급 검증 완료 · 이행 검증 전에는 구매 완료가 아닙니다.", "Payment verified. The purchase is not complete until fulfillment is verified.") : t("결제 완료 전 · 서버 검증 상태를 기다리고 있습니다.", "Payment is not complete. Waiting for server verification.")}</p>
     </>}
     {pending && <div className="state-panel"><p>{({ deploy: t("배포", "Deployment"), allowance: t("토큰 사용 허용", "Token allowance"), fund: t("충전", "Funding") })[pending.kind]} · {pending.confirmed ? t("영수증 확인됨", "Receipt verified") : t("지갑 요청 확인 대기", "Awaiting wallet response")}</p>{pending.hash ? <><a className="text-link" href={`https://sepolia.etherscan.io/tx/${pending.hash}`} target="_blank" rel="noreferrer">{t('Sepolia 거래 확인 ↗', 'View Sepolia transaction ↗')}</a>{!pending.confirmed && <button className="button secondary" disabled={disabled} onClick={()=>void run(receipt)}>{t('지갑 거래 영수증 확인', 'Check wallet transaction receipt')}</button>}</> : <><p>{t('응답을 받기 전까지 재전송을 차단합니다. 지갑 활동에서 해당 거래 해시를 찾으면 영수증을 검증하여 복구할 수 있습니다.', 'Resubmission is blocked until a response is received. If you find the transaction hash in wallet activity, verify its receipt to recover.')}</p><form onSubmit={event=>{event.preventDefault();const hash=String(new FormData(event.currentTarget).get("hash"));void run(async()=>{if(!/^0x[0-9a-f]{64}$/i.test(hash))throw new Error("올바른 거래 해시를 입력하세요.");save({...pending,hash});});}}><label className="field">{t('지갑에서 확인한 거래 해시', 'Transaction hash found in wallet')}<input name="hash" required pattern="0x[0-9a-fA-F]{64}" /></label><button className="button secondary" disabled={disabled}>{t('해시로 복구 · 재전송 없음', 'Recover by hash · no resubmission')}</button></form></>}</div>}
-    {busy && <p role="status">{t('처리 중 · 중복 클릭과 자동 재시도 차단', 'Processing · duplicate clicks and automatic retries blocked')}</p>}{notice && <p role="status">{localizedExecutionMessage(notice, locale)}</p>}{error && <><p role="alert">{localizedExecutionMessage(error, locale)}</p>{executionCode(error) && <details className="studio-details"><summary>{t("진단 코드", "Diagnostic code")}</summary><code>{executionCode(error)}</code></details>}</>}
+    {busy && <p role="status">{t('처리 중 · 중복 클릭과 자동 재시도 차단', 'Processing · duplicate clicks and automatic retries blocked')}</p>}{notice && <p role="status">{localizedExecutionMessage(notice, locale)}</p>}{error && <><p role="alert">{localizedExecutionMessage(error, locale)}</p>{walletDiagnostic && <details className="studio-details"><summary>{t("지갑 요청 진단", "Wallet request diagnostic")}</summary><dl><div><dt>{t("단계", "Phase")}</dt><dd>{({ account: t("지갑 계정 확인", "Wallet account check"), chain: t("지갑 네트워크 확인", "Wallet network check"), operation: t("지갑 거래 요청", "Wallet transaction request") })[walletDiagnostic.phase]}</dd></div><div><dt>{t("분류", "Category")}</dt><dd><code>{walletDiagnostic.category}</code></dd></div><div><dt>{t("제공자 코드", "Provider code")}</dt><dd><code>{walletDiagnostic.code ?? t("없음", "Unavailable")}</code></dd></div></dl></details>}{executionCode(error) && <details className="studio-details"><summary>{t("진단 코드", "Diagnostic code")}</summary><code>{executionCode(error)}</code></details>}</>}
     {serverUnknown && <p role="alert">{t('서버 거래 결과를 확인하지 못했습니다. 같은 승인·지급 요청을 다시 보내지 않습니다. 계정·거래 상태를 조회하고, 제출된 거래가 있다면 영수증을 재확인하세요.', 'Server transaction result could not be confirmed. Do not resend the same approval or payment. Check account and transaction status, and recheck any submitted transaction receipt.')}</p>}
     {stopped && <p role="alert">{t('STOPPED · 승인·충전·지급·후속 실행 금지. 열려 있는 지갑 요청은 지갑에서 직접 거절하세요. 이미 제출된 거래는 취소되지 않습니다. 서버 취소와 온체인 권한 철회는 별도 확인이 필요합니다.', 'STOPPED · Approval, funding, payment, and further actions are blocked. Reject any open wallet request in your wallet. Submitted transactions cannot be cancelled here. Server cancellation and onchain revocation need separate verification.')}</p>}
   </section>;

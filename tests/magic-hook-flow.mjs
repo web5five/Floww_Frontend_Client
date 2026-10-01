@@ -131,22 +131,27 @@ async function fixture() {
     return response;
   };
   const providerHooks = hooks(), dialogHooks = hooks();
-  let loggedIn = false, closed = false, heldMethod = "", releaseGuard, activeWallet;
+  let loggedIn = false, closed = false, heldMethod = "", failedMethod = "", synchronousFailure = false, releaseGuard, activeWallet;
   providerHooks.react.useContext = () => activeWallet;
   const sdk = {
     auth: { loginWithEmailOTP: async ({ email }) => { assert.equal(email, "person@example.test"); events.push("otp"); loggedIn = true; return "synthetic-did-is-not-identity"; } },
     user: { isLoggedIn: async () => loggedIn, logout: async () => { events.push("magic-logout"); loggedIn = false; }, onUserLoggedOut: () => {} },
     rpcProvider: {
-      request: async ({ method, params }) => {
+      request: ({ method, params }) => {
         events.push(method);
+        if (method === failedMethod) {
+          const failure = { code: -32603, message: "SECRET_PROVIDER_MESSAGE", data: { rawTransaction: "SECRET_TX_PAYLOAD" } };
+          if (synchronousFailure) throw failure;
+          return Promise.reject(failure);
+        }
         if (method === heldMethod) { events.push(`held:${method}`); return new Promise(resolve => { releaseGuard = resolve; }); }
-        if (method === "eth_accounts") return loggedIn ? [ADDRESS] : [];
-        if (method === "eth_chainId") return CHAIN;
+        if (method === "eth_accounts") return Promise.resolve(loggedIn ? [ADDRESS] : []);
+        if (method === "eth_chainId") return Promise.resolve(CHAIN);
         if (method === "personal_sign") {
           assert.deepEqual(params, [`0x${Buffer.from(message, "utf8").toString("hex")}`, ADDRESS]);
-          return SIGNATURE;
+          return Promise.resolve(SIGNATURE);
         }
-        if (method === "eth_sendTransaction") return "unexpected-send";
+        if (method === "eth_sendTransaction") return Promise.resolve("unexpected-send");
         throw new Error(`Unexpected provider method ${method}`);
       },
       on: () => {}, removeListener: () => {},
@@ -201,6 +206,7 @@ async function fixture() {
   return {
     events, cookies, session, message, renderProvider, beginLogin, signIn, releaseChallenge: releaseNonce, isClosed: () => closed,
     hold(method) { heldMethod = method; },
+    failProvider(method, sync = false) { failedMethod = method; synchronousFailure = sync; },
     release(value) { heldMethod = ""; assert.ok(releaseGuard); releaseGuard(value); releaseGuard = null; },
     expire() { const now = Date.now; Date.now = () => Date.parse(sessionExpiresAt) + 1; try { browserWindow.dispatchEvent(new Event("focus")); } finally { Date.now = now; } },
     async close() {
@@ -222,6 +228,68 @@ test("actual auth hook composes Magic OTP provider, exact SIWE, BFF session and 
     assert.deepEqual(await adapter.walletAuthAdapter.getSession(), flow.session);
     assert.equal(flow.cookies.has("floww_wallet_session"), true);
     assert.equal(flow.renderProvider().auth.isCurrent(flow.renderProvider().auth.snapshot()), true);
+  } finally { await flow.close(); }
+});
+
+for (const [method, phase] of [["eth_accounts", "account"], ["eth_chainId", "chain"], ["eth_sendTransaction", "operation"]]) test(`actual Magic provider records safe ${phase} failure phase`, async () => {
+  const flow = await fixture();
+  try {
+    await flow.signIn();
+    flow.failProvider(method);
+    await assert.rejects(flow.renderProvider().requestForOwner(ADDRESS, "eth_sendTransaction", [{ to: ADDRESS }]), cause => {
+      assert.ok(cause instanceof wallet.WalletRequestFailure);
+      assert.equal(cause.phase, phase);
+      assert.equal(cause.code, -32603);
+      assert.equal(cause.category, "provider_internal");
+      assert.doesNotMatch(JSON.stringify(cause), /SECRET_PROVIDER_MESSAGE|SECRET_TX_PAYLOAD/);
+      return true;
+    });
+    assert.equal(flow.events.filter(event => event === "eth_sendTransaction").length, phase === "operation" ? 1 : 0);
+  } finally { await flow.close(); }
+});
+
+test("synchronous Magic provider throw also records the request phase", async () => {
+  const flow = await fixture();
+  try {
+    await flow.signIn();
+    flow.failProvider("eth_sendTransaction", true);
+    await assert.rejects(flow.renderProvider().requestForOwner(ADDRESS, "eth_sendTransaction", [{}]), cause => {
+      assert.ok(cause instanceof wallet.WalletRequestFailure);
+      assert.equal(cause.phase, "operation");
+      assert.equal(cause.code, -32603);
+      assert.doesNotMatch(JSON.stringify(cause), /SECRET_PROVIDER_MESSAGE|SECRET_TX_PAYLOAD/);
+      return true;
+    });
+  } finally { await flow.close(); }
+});
+
+test("connection notice follows the actual server session without granting purchase authority", async () => {
+  const flow = await fixture();
+  try {
+    await flow.beginLogin();
+    assert.match(flow.renderProvider().notice, /로그인 전/);
+    flow.releaseChallenge();
+    await until(() => flow.renderProvider().auth.session);
+    assert.equal(flow.renderProvider().notice, "서버 로그인 완료 · 구매 및 지출은 별도 승인이 필요합니다.");
+    assert.equal(flow.events.filter(event => event === "personal_sign").length, 1);
+    assert.equal(flow.events.includes("eth_sendTransaction"), false);
+    await flow.renderProvider().auth.logout();
+    assert.equal(flow.renderProvider().auth.session, null);
+    assert.match(flow.renderProvider().notice, /로그인 전/);
+    assert.ok(flow.renderProvider().connection, "sign-out keeps the wallet connection distinct");
+  } finally { await flow.close(); }
+});
+
+test("expired server session restores the pre-login notice and keeps its warning", async () => {
+  const flow = await fixture();
+  try {
+    await flow.signIn();
+    assert.match(flow.renderProvider().notice, /서버 로그인 완료/);
+    flow.expire();
+    assert.equal(flow.renderProvider().auth.session, null);
+    assert.match(flow.renderProvider().notice, /로그인 전/);
+    assert.match(flow.renderProvider().auth.error, /expired/);
+    assert.ok(flow.renderProvider().connection);
   } finally { await flow.close(); }
 });
 

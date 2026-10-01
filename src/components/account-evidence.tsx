@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Clock3, ExternalLink } from "lucide-react";
-import { tasks } from "@/lib/api/task-client";
+import { tasks, TaskRequestError } from "@/lib/api/task-client";
 import { accountProgress, type AccountEvidence as Evidence } from "@/lib/api/account-evidence";
 import { formatFusdc } from "@/lib/pharmacy-preview";
 import { useLocale } from "@/lib/i18n";
@@ -9,20 +9,20 @@ import { statusLabel } from "@/lib/scenario-presentation";
 
 export function AccountEvidence({ taskId, taskStatus }: { taskId: string; taskStatus: string }) {
   const { locale, t } = useLocale();
-  const [account, setAccount] = useState<Evidence | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [account, setAccount] = useState<Evidence | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState<"account_not_ready" | "failed" | "">("");
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), []);
   async function refresh() {
     if (request.current) return;
     const controller = new AbortController(); request.current = controller; setBusy(true); setError(""); setAccount(null);
     try { const next = await tasks.account(taskId, controller.signal); if (!controller.signal.aborted) setAccount(next); }
-    catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "조회 실패"); }
+    catch (e) { if (!controller.signal.aborted) setError(e instanceof TaskRequestError && e.status === 409 && e.reasonCode === "CHAIN_NOT_READY" ? "account_not_ready" : "failed"); }
     finally { request.current = null; if (!controller.signal.aborted) setBusy(false); }
   }
   const progress = account ? accountProgress(account, taskStatus) : null;
   const dateLocale = locale === "ko" ? "ko-KR" : "en-US";
   return <section className="account-evidence" aria-label={t("서버 결제 증거", "Server payment evidence")}><div className="section-heading"><h3>{t("결제와 증거", "Payment and evidence")}</h3><button className="button secondary" disabled={busy} onClick={() => void refresh()}>{busy ? t("증거 조회 중", "Loading evidence") : t("서버 결제 증거 조회", "View server payment evidence")}</button></div>
-    {error && <p role="alert">{t("결제 증거를 조회하지 못했습니다.", "Payment evidence could not be retrieved.")}</p>}
+    {error && <p role="alert">{error === "account_not_ready" ? t("서버가 이 작업의 Task Account 또는 체인 모드가 아직 준비되지 않았다고 응답했습니다. 이 응답만으로 거래 유무를 확인할 수 없습니다.", "The server reports that this Task Account or chain mode is not ready yet. This response does not establish whether a transaction exists.") : t("결제 증거를 조회하지 못했습니다.", "Payment evidence could not be retrieved.")}</p>}
     {!account && !error && <p className="form-note">{t("선택한 작업의 서버 기록을 조회하세요. 팀의 검증 예시 거래는 이 작업에 사용하지 않습니다.", "View server records for the selected Task. Team verification transactions are not used for this Task.")}</p>}
     {account && progress && <><p role="status">{progress.completed ? t("서버 결제·이행 검증 완료 · 작업 완료", "Server payment and fulfillment verified · Task completed") : t("서버 증거 확인 중 · 완료 미확정", "Checking server evidence · completion unconfirmed")} · {statusLabel(account.state, locale)}</p><p>{formatFusdc(account.amountBaseUnits)} · Sepolia</p>
       <div className="evidence-grid">{[[t("결제 영수증", "Payment receipt"), progress.paid], [t("이행 확인", "Fulfillment verification"), progress.fulfilled], [t("Task 완료", "Task completed"), progress.completed]].map(([name, done]) => <div className="evidence-item" key={String(name)}>{done ? <CheckCircle2 size={20} aria-hidden="true" /> : <Clock3 size={20} aria-hidden="true" />}<div><strong>{name}</strong><small>{done ? t("서버 검증됨", "Server verified") : t("검증 대기", "Awaiting verification")}</small></div></div>)}</div>

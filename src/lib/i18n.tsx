@@ -40,6 +40,7 @@ const walletNotices: Record<string, string> = {
   "지갑 계정 또는 네트워크가 변경되었습니다. 다시 연결하고 로그인해야 합니다.": "Your wallet account or network changed. Reconnect and sign in again.",
   "지갑 연결이 끊겼습니다. 다시 연결해 주세요.": "Wallet connection lost. Please reconnect.",
   "지갑 연결됨 · 로그인 전. 연결만으로 사용자 인증이나 지출 권한이 생기지 않습니다.": "Wallet connected · not signed in. Connecting alone does not authenticate you or authorize spending.",
+  "서버 로그인 완료 · 구매 및 지출은 별도 승인이 필요합니다.": "Server sign-in complete · purchases and spending require separate approval.",
   "지갑 연결을 거절했습니다. 원할 때 다시 연결할 수 있습니다.": "Wallet connection rejected. You can connect again whenever you choose.",
   "지갑에 대기 중인 요청이 있습니다. 지갑 화면을 확인해 주세요.": "A request is pending in your wallet. Check your wallet screen.",
   "지갑 또는 네트워크 연결이 끊겼습니다.": "Wallet or network connection lost.",

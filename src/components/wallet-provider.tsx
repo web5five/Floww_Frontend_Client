@@ -1,11 +1,13 @@
 "use client";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { account, chain, isProvider, walletError, type WalletOption } from "@/lib/auth/wallet";
+import { account, chain, isProvider, walletError, WalletRequestFailure, type WalletOption, type WalletRequestPhase } from "@/lib/auth/wallet";
 import { useWalletAuth } from "@/lib/auth/use-wallet-auth";
 import { createMagicAdapter, magicConfigured, MagicLoginError, type MagicErrorCode } from "@/lib/auth/magic";
 import type { Locale } from "@/lib/i18n";
 
 type Connection = { address: string; chainId: string; name: string };
+const connectedBeforeLogin = "지갑 연결됨 · 로그인 전. 연결만으로 사용자 인증이나 지출 권한이 생기지 않습니다.";
+const signedInNotice = "서버 로그인 완료 · 구매 및 지출은 별도 승인이 필요합니다.";
 interface WalletContextValue {
   auth: ReturnType<typeof useWalletAuth>;
   login(): Promise<void>;
@@ -133,7 +135,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (auth.session && (auth.session.identity.address.toLowerCase() !== address.toLowerCase() || auth.session.chainId !== BigInt(chainId).toString())) void auth.logout();
       const next = { address, chainId, name: wallet.name };
       setConnection(next);
-      setNotice("지갑 연결됨 · 로그인 전. 연결만으로 사용자 인증이나 지출 권한이 생기지 않습니다.");
+      setNotice(connectedBeforeLogin);
       return next;
     } catch (error) {
       if (attempt === serial.current) { unsubscribe.current(); setConnection(null); setNotice(walletError(error)); }
@@ -178,14 +180,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const wallet = selected.current, revision = serial.current;
     const proof = auth.snapshot(), session = proof.session;
     if (!wallet || !auth.isCurrent(proof) || !session || !connection || connection.address.toLowerCase() !== owner.toLowerCase() || session.identity.address.toLowerCase() !== owner.toLowerCase() || session.chainId !== "11155111" || !allowed()) throw new Error("지갑 로그인과 연결을 확인하세요.");
-    const address = account(await wallet.provider.request({ method: "eth_accounts" }));
-    const network = chain(await wallet.provider.request({ method: "eth_chainId" }));
+    const providerRequest = async (phase: WalletRequestPhase, input: { method: string; params?: unknown[] }) => {
+      try { return await wallet.provider.request(input); }
+      catch (cause) { throw new WalletRequestFailure(phase, cause); }
+    };
+    const address = account(await providerRequest("account", { method: "eth_accounts" }));
+    const network = chain(await providerRequest("chain", { method: "eth_chainId" }));
     if (revision !== serial.current || !auth.isCurrent(proof) || selected.current !== wallet || address?.toLowerCase() !== owner.toLowerCase() || !network || BigInt(network) !== BigInt(11155111) || !allowed()) throw new Error("지갑 계정·Sepolia 네트워크 변경 또는 STOP으로 요청을 차단했습니다.");
     // Return transaction hashes even when disconnect happens during the wallet popup:
     // callers persist them before checking STOP again, preventing duplicate sends.
-    return wallet.provider.request({ method, params });
+    return providerRequest("operation", { method, params });
   }
-  return <WalletContext.Provider value={{ auth, login, wallets, connection, busy, notice, magic: { configured: magicConfigured(), pending: magicPending, error: magicError }, magicSelected, connect, connectMagic, cancelMagic, disconnect, discover, requestForOwner }}>{children}</WalletContext.Provider>;
+  const currentSession = auth.snapshot();
+  const authenticatedConnection = !!connection && auth.isCurrent(currentSession) &&
+    currentSession.session?.identity.address.toLowerCase() === connection.address.toLowerCase() &&
+    currentSession.session.chainId === BigInt(connection.chainId).toString();
+  const visibleNotice = notice === connectedBeforeLogin && authenticatedConnection ? signedInNotice : notice;
+  return <WalletContext.Provider value={{ auth, login, wallets, connection, busy, notice: visibleNotice, magic: { configured: magicConfigured(), pending: magicPending, error: magicError }, magicSelected, connect, connectMagic, cancelMagic, disconnect, discover, requestForOwner }}>{children}</WalletContext.Provider>;
 }
 export function useWallet() {
   const value = useContext(WalletContext);

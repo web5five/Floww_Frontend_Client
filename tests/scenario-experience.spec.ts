@@ -143,7 +143,7 @@ test("route steps preserve one Task, chat resumes it, and denials cannot pay", a
       await expect(page.getByRole("region", {name:"Floww 음성 대화"})).toBeVisible();
       await expect(page.getByRole("button", {name:"음성 대화 시작",exact:true})).toBeDisabled();
       await page.getByRole("button", { name: "음성 대화 닫기" }).click();
-      await expect(page.getByRole("link", {name:/음성 화면 크게/})).toHaveAttribute("href", `/voice?taskId=${taskId}`);
+      await expect(page.getByRole("link", {name:/음성 화면 크게/})).toHaveAttribute("href", `/voice?taskId=${taskId}&from=chat&scenario=${scenario}`);
     } else {
       await expect(page.getByRole("button", { name: "음성 대화 열기" })).toHaveCount(0);
       await expect(page.locator('a[href^="/voice"]')).toHaveCount(0);
